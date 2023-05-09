@@ -1,6 +1,7 @@
 #include "../subghz_i.h"
 #include "../views/transmitter.h"
 #include <dolphin/dolphin.h>
+#include <xtreme.h>
 #include <lib/subghz/protocols/keeloq.h>
 #include <lib/subghz/protocols/star_line.h>
 
@@ -16,14 +17,11 @@ bool subghz_scene_transmitter_update_data_show(void* context) {
     SubGhz* subghz = context;
     bool ret = false;
     if(subghz->txrx->decoder_result) {
-        FuriString* key_str;
-        FuriString* frequency_str;
-        FuriString* modulation_str;
+        FuriString* key_str = furi_string_alloc();
+        FuriString* frequency_str = furi_string_alloc();
+        FuriString* modulation_str = furi_string_alloc();
 
-        key_str = furi_string_alloc();
-        frequency_str = furi_string_alloc();
-        modulation_str = furi_string_alloc();
-        uint8_t show_button = 0;
+        bool show_button = false;
 
         if(subghz_protocol_decoder_base_deserialize(
                subghz->txrx->decoder_result, subghz->txrx->fff_data) == SubGhzProtocolStatusOk) {
@@ -31,7 +29,7 @@ bool subghz_scene_transmitter_update_data_show(void* context) {
 
             if((subghz->txrx->decoder_result->protocol->flag & SubGhzProtocolFlag_Send) ==
                SubGhzProtocolFlag_Send) {
-                show_button = 1;
+                show_button = true;
             }
 
             subghz_get_frequency_modulation(subghz, frequency_str, modulation_str);
@@ -50,8 +48,18 @@ bool subghz_scene_transmitter_update_data_show(void* context) {
     return ret;
 }
 
+void fav_timer_callback(void* context) {
+    SubGhz* subghz = context;
+    scene_manager_handle_custom_event(
+        subghz->scene_manager, SubGhzCustomEventViewTransmitterSendStop);
+}
+
 void subghz_scene_transmitter_on_enter(void* context) {
     SubGhz* subghz = context;
+
+    keeloq_reset_original_btn();
+    subghz_custom_btns_reset();
+
     if(!subghz_scene_transmitter_update_data_show(subghz)) {
         view_dispatcher_send_custom_event(
             subghz->view_dispatcher, SubGhzCustomEventViewTransmitterError);
@@ -62,6 +70,23 @@ void subghz_scene_transmitter_on_enter(void* context) {
 
     subghz->state_notifications = SubGhzNotificationStateIDLE;
     view_dispatcher_switch_to_view(subghz->view_dispatcher, SubGhzViewIdTransmitter);
+
+    // Auto send and exit with favorites
+    if(subghz->fav_timeout) {
+        subghz_custom_btn_set(0);
+        scene_manager_handle_custom_event(
+            subghz->scene_manager, SubGhzCustomEventViewTransmitterSendStart);
+        with_view_model(
+            subghz->subghz_transmitter->view,
+            SubGhzViewTransmitterModel * model,
+            { model->show_button = false; },
+            true);
+        subghz->fav_timer = furi_timer_alloc(fav_timer_callback, FuriTimerTypeOnce, subghz);
+        furi_timer_start(
+            subghz->fav_timer,
+            XTREME_SETTINGS()->favorite_timeout * furi_kernel_get_tick_frequency());
+        subghz->state_notifications = SubGhzNotificationStateTx;
+    }
 }
 
 bool subghz_scene_transmitter_on_event(void* context, SceneManagerEvent event) {
@@ -74,9 +99,7 @@ bool subghz_scene_transmitter_on_event(void* context, SceneManagerEvent event) {
             }
             if((subghz->txrx->txrx_state == SubGhzTxRxStateIDLE) ||
                (subghz->txrx->txrx_state == SubGhzTxRxStateSleep)) {
-                if(!subghz_tx_start(subghz, subghz->txrx->fff_data)) {
-                    scene_manager_next_scene(subghz->scene_manager, SubGhzSceneShowOnlyRx);
-                } else {
+                if(subghz_tx_start(subghz, subghz->txrx->fff_data)) {
                     subghz->state_notifications = SubGhzNotificationStateTx;
                     subghz_scene_transmitter_update_data_show(subghz);
                     DOLPHIN_DEED(DolphinDeedSubGhzSend);
@@ -106,6 +129,11 @@ bool subghz_scene_transmitter_on_event(void* context, SceneManagerEvent event) {
                 subghz_tx_stop(subghz);
                 subghz_sleep(subghz);
                 furi_hal_subghz_set_rolling_counter_mult(tmp_counter);
+            }
+            if(subghz->fav_timeout) {
+                while(scene_manager_handle_back_event(subghz->scene_manager))
+                    ;
+                view_dispatcher_stop(subghz->view_dispatcher);
             }
             return true;
         } else if(event.event == SubGhzCustomEventViewTransmitterBack) {

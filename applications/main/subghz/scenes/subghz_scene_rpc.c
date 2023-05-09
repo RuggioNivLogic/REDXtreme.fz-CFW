@@ -4,7 +4,7 @@
 
 #include <lib/subghz/blocks/custom_btn.h>
 
-#include "xtreme/assets.h"
+#include <xtreme.h>
 
 typedef enum {
     SubGhzRpcStateIdle,
@@ -73,8 +73,7 @@ bool subghz_scene_rpc_on_event(void* context, SceneManagerEvent event) {
                         subghz->scene_manager, SubGhzSceneRpc, SubGhzRpcStateLoaded);
                     furi_string_set(subghz->file_path, arg);
                     result = true;
-                    FuriString* file_name;
-                    file_name = furi_string_alloc();
+                    FuriString* file_name = furi_string_alloc();
                     path_extract_filename(subghz->file_path, file_name, true);
 
                     snprintf(

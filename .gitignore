@@ -2,6 +2,7 @@
 *.swp
 *.swo
 *.gdb_history
+*.old
 
 
 # LSP
@@ -30,7 +31,7 @@ bindings/
 Brewfile.lock.json
 
 # Visual Studio Code
-.vscode/
+/.vscode/
 
 # Visual Studio
 .vs/
