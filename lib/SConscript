@@ -14,8 +14,9 @@ env.Append(
         Dir("toolbox"),
         Dir("u8g2"),
         Dir("update_util"),
+        Dir("xtreme"),
         Dir("print"),
-        Dir("pulse_reader"),
+        Dir("music_worker"),
     ],
 )
 
@@ -23,10 +24,11 @@ env.Append(
 env.Append(
     CPPPATH=[
         "#/",
-        "#/lib",  # TODO: remove!
+        "#/lib",  # TODO FL-3553: remove!
         "#/lib/mlib",
         # Ugly hack
         Dir("../assets/compiled"),
+        Dir("../../icons"),
     ],
     SDK_HEADERS=[
         *(
@@ -44,6 +46,7 @@ env.Append(
                 "variant",
             )
         ),
+        File("../../icons/assets_icons.h"),
         File("xtreme/xtreme.h"),
     ],
     CPPDEFINES=[
@@ -96,11 +99,13 @@ libs = env.BuildModules(
         "mbedtls",
         "subghz",
         "nfc",
+        "digital_signal",
         "pulse_reader",
         "appframe",
         "misc",
         "lfrfid",
         "flipper_application",
+        "music_worker",
     ],
 )
 

@@ -9,11 +9,13 @@
 #include <portmacro.h>
 
 #include <furi.h>
+#include <furi_hal.h>
 
 #include <cli/cli.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <m-dict.h>
+#include <xtreme.h>
 
 #define TAG "RpcSrv"
 
@@ -363,6 +365,10 @@ static void rpc_session_thread_state_callback(FuriThreadState thread_state, void
 }
 
 RpcSession* rpc_session_open(Rpc* rpc, RpcOwner owner) {
+    if(furi_hal_rtc_is_flag_set(FuriHalRtcFlagLock) &&
+       !XTREME_SETTINGS()->allow_locked_rpc_commands)
+        return NULL;
+
     furi_assert(rpc);
 
     RpcSession* session = malloc(sizeof(RpcSession));

@@ -3,6 +3,7 @@
 #include <notification/notification.h>
 #include <notification/notification_messages.h>
 #include <storage/storage.h>
+#include <dolphin/dolphin.h>
 
 #include "sandbox.h"
 
@@ -11,8 +12,7 @@
 #define CELL_HEIGHT 8
 #define MOVE_TICKS 5
 #define KEY_STACK_SIZE 16
-#define SAVING_DIRECTORY "/ext/apps/Games"
-#define SAVING_FILENAME SAVING_DIRECTORY "/game15.save"
+#define SAVING_FILENAME APP_DATA_PATH("game15.save")
 #define POPUP_MENU_ITEMS 2
 
 typedef enum {
@@ -116,6 +116,8 @@ static int key_stack_push(uint8_t value) {
 
 static bool storage_game_state_load() {
     Storage* storage = furi_record_open(RECORD_STORAGE);
+    storage_common_migrate(storage, EXT_PATH("apps/Games/game15.save"), SAVING_FILENAME);
+
     File* file = storage_file_alloc(storage);
 
     uint16_t bytes_readed = 0;
@@ -129,12 +131,6 @@ static bool storage_game_state_load() {
 
 static void storage_game_state_save() {
     Storage* storage = furi_record_open(RECORD_STORAGE);
-
-    if(storage_common_stat(storage, SAVING_DIRECTORY, NULL) == FSE_NOT_EXIST) {
-        if(!storage_simply_mkdir(storage, SAVING_DIRECTORY)) {
-            return;
-        }
-    }
 
     File* file = storage_file_alloc(storage);
     if(storage_file_open(file, SAVING_FILENAME, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
@@ -461,6 +457,9 @@ int32_t game15_app() {
 
     sandbox_init(
         FPS, (SandboxRenderCallback)render_callback, (SandboxEventHandler)game_event_handler);
+
+    // Call dolphin deed on game start
+    dolphin_deed(DolphinDeedPluginGameStart);
 
     sandbox_loop();
     sandbox_free();

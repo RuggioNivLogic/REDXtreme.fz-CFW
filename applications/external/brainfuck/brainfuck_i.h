@@ -29,7 +29,8 @@ typedef unsigned char byte;
 
 #include <storage/storage.h>
 #include <lib/toolbox/path.h>
-#include <Brainfuck_icons.h>
+#include "brainfuck_icons.h"
+#include <assets_icons.h>
 
 #include <storage/storage.h>
 #include <stream/stream.h>
@@ -37,7 +38,6 @@ typedef unsigned char byte;
 #include <toolbox/stream/file_stream.h>
 
 #include <notification/notification_messages.h>
-#include <notification/notification_app.h>
 
 #define BF_INST_BUFFER_SIZE 2048
 #define BF_OUTPUT_SIZE 512

@@ -19,9 +19,9 @@ void picopass_scene_read_card_success_on_enter(void* context) {
     FuriString* csn_str = furi_string_alloc_set("CSN:");
     FuriString* credential_str = furi_string_alloc();
     FuriString* wiegand_str = furi_string_alloc();
-    FuriString* sio_str = furi_string_alloc();
+    FuriString* key_str = furi_string_alloc();
 
-    DOLPHIN_DEED(DolphinDeedNfcReadSuccess);
+    dolphin_deed(DolphinDeedNfcReadSuccess);
 
     // Send notification
     notification_message(picopass->notifications, &sequence_success);
@@ -31,15 +31,15 @@ void picopass_scene_read_card_success_on_enter(void* context) {
     PicopassPacs* pacs = &picopass->dev->dev_data.pacs;
     Widget* widget = picopass->widget;
 
-    uint8_t csn[PICOPASS_BLOCK_LEN] = {0};
-    memcpy(csn, AA1[PICOPASS_CSN_BLOCK_INDEX].data, PICOPASS_BLOCK_LEN);
-    for(uint8_t i = 0; i < PICOPASS_BLOCK_LEN; i++) {
+    uint8_t csn[RFAL_PICOPASS_BLOCK_LEN] = {0};
+    memcpy(csn, AA1[PICOPASS_CSN_BLOCK_INDEX].data, RFAL_PICOPASS_BLOCK_LEN);
+    for(uint8_t i = 0; i < RFAL_PICOPASS_BLOCK_LEN; i++) {
         furi_string_cat_printf(csn_str, "%02X", csn[i]);
     }
 
-    bool no_key = picopass_is_memset(pacs->key, 0x00, PICOPASS_BLOCK_LEN);
-    bool empty =
-        picopass_is_memset(AA1[PICOPASS_PACS_CFG_BLOCK_INDEX].data, 0xFF, PICOPASS_BLOCK_LEN);
+    bool no_key = picopass_is_memset(pacs->key, 0x00, RFAL_PICOPASS_BLOCK_LEN);
+    bool empty = picopass_is_memset(
+        AA1[PICOPASS_ICLASS_PACS_CFG_BLOCK_INDEX].data, 0xFF, RFAL_PICOPASS_BLOCK_LEN);
 
     if(no_key) {
         furi_string_cat_printf(wiegand_str, "Read Failed");
@@ -78,8 +78,8 @@ void picopass_scene_read_card_success_on_enter(void* context) {
     } else {
         size_t bytesLength = 1 + pacs->record.bitLength / 8;
         furi_string_set(credential_str, "");
-        for(uint8_t i = PICOPASS_BLOCK_LEN - bytesLength; i < PICOPASS_BLOCK_LEN; i++) {
-            furi_string_cat_printf(credential_str, " %02X", pacs->credential[i]);
+        for(uint8_t i = RFAL_PICOPASS_BLOCK_LEN - bytesLength; i < RFAL_PICOPASS_BLOCK_LEN; i++) {
+            furi_string_cat_printf(credential_str, "%02X", pacs->credential[i]);
         }
 
         if(pacs->record.valid) {
@@ -90,19 +90,16 @@ void picopass_scene_read_card_success_on_enter(void* context) {
         }
 
         if(pacs->sio) {
-            furi_string_cat_printf(sio_str, "+SIO");
+            furi_string_cat_printf(credential_str, " +SIO");
         }
 
         if(pacs->key) {
-            if(pacs->sio) {
-                furi_string_cat_printf(sio_str, " ");
-            }
-            furi_string_cat_printf(sio_str, "Key: ");
+            furi_string_cat_printf(key_str, "Key: ");
 
-            uint8_t key[PICOPASS_BLOCK_LEN];
-            memcpy(key, &pacs->key, PICOPASS_BLOCK_LEN);
-            for(uint8_t i = 0; i < PICOPASS_BLOCK_LEN; i++) {
-                furi_string_cat_printf(sio_str, "%02X", key[i]);
+            uint8_t key[RFAL_PICOPASS_BLOCK_LEN];
+            memcpy(key, &pacs->key, RFAL_PICOPASS_BLOCK_LEN);
+            for(uint8_t i = 0; i < RFAL_PICOPASS_BLOCK_LEN; i++) {
+                furi_string_cat_printf(key_str, "%02X", key[i]);
             }
         }
 
@@ -134,12 +131,12 @@ void picopass_scene_read_card_success_on_enter(void* context) {
         FontSecondary,
         furi_string_get_cstr(credential_str));
     widget_add_string_element(
-        widget, 64, 46, AlignCenter, AlignCenter, FontSecondary, furi_string_get_cstr(sio_str));
+        widget, 64, 46, AlignCenter, AlignCenter, FontSecondary, furi_string_get_cstr(key_str));
 
     furi_string_free(csn_str);
     furi_string_free(credential_str);
     furi_string_free(wiegand_str);
-    furi_string_free(sio_str);
+    furi_string_free(key_str);
 
     view_dispatcher_switch_to_view(picopass->view_dispatcher, PicopassViewWidget);
 }

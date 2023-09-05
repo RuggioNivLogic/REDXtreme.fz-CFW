@@ -5,8 +5,9 @@
 #include <input/input.h>
 #include <notification/notification.h>
 #include <notification/notification_messages.h>
-#include <gui/canvas_i.h>
 #include "bomberduck_icons.h"
+#include <assets_icons.h>
+#include <dolphin/dolphin.h>
 
 int max(int a, int b) {
     return (a > b) ? a : b;
@@ -382,6 +383,7 @@ int32_t bomberduck_app(void* p) {
         return 255;
     }
 
+    dolphin_deed(DolphinDeedPluginGameStart);
     // Создаем новый view port
     ViewPort* view_port = view_port_alloc();
     // Создаем callback отрисовки, без контекста
@@ -455,6 +457,9 @@ int32_t bomberduck_app(void* p) {
                 notification_message(notification, &end);
                 world.running = 0;
                 world.level += 1;
+                if(world.level % 5 == 0) {
+                    dolphin_deed(DolphinDeedPluginGameWin);
+                }
             }
             for(int i = 0; i < world.bombs_count; i++) {
                 if(furi_get_tick() - world.bombs[i].planted >

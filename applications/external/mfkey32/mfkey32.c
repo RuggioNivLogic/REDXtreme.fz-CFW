@@ -13,6 +13,7 @@
 #include <input/input.h>
 #include <stdlib.h>
 #include "mfkey32_icons.h"
+#include <assets_icons.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -1112,7 +1113,7 @@ void mfkey32(ProgramState* program_state) {
     }
     if(keyarray_size > 0) {
         // TODO: Should we use DolphinDeedNfcMfcAdd?
-        DOLPHIN_DEED(DolphinDeedNfcMfcAdd);
+        dolphin_deed(DolphinDeedNfcMfcAdd);
     }
     napi_mf_classic_nonce_array_free(nonce_arr);
     napi_mf_classic_dict_free(user_dict);

@@ -1,5 +1,4 @@
 #include "picopass_i.h"
-#include <dolphin/dolphin.h>
 
 #define TAG "PicoPass"
 
@@ -69,6 +68,13 @@ Picopass* picopass_alloc() {
         PicopassViewTextInput,
         text_input_get_view(picopass->text_input));
 
+    // Byte Input
+    picopass->byte_input = byte_input_alloc();
+    view_dispatcher_add_view(
+        picopass->view_dispatcher,
+        PicopassViewByteInput,
+        byte_input_get_view(picopass->byte_input));
+
     // Custom Widget
     picopass->widget = widget_alloc();
     view_dispatcher_add_view(
@@ -79,6 +85,10 @@ Picopass* picopass_alloc() {
         picopass->view_dispatcher,
         PicopassViewDictAttack,
         dict_attack_get_view(picopass->dict_attack));
+
+    picopass->loclass = loclass_alloc();
+    view_dispatcher_add_view(
+        picopass->view_dispatcher, PicopassViewLoclass, loclass_get_view(picopass->loclass));
 
     return picopass;
 }
@@ -106,12 +116,19 @@ void picopass_free(Picopass* picopass) {
     view_dispatcher_remove_view(picopass->view_dispatcher, PicopassViewTextInput);
     text_input_free(picopass->text_input);
 
+    // ByteInput
+    view_dispatcher_remove_view(picopass->view_dispatcher, PicopassViewByteInput);
+    byte_input_free(picopass->byte_input);
+
     // Custom Widget
     view_dispatcher_remove_view(picopass->view_dispatcher, PicopassViewWidget);
     widget_free(picopass->widget);
 
     view_dispatcher_remove_view(picopass->view_dispatcher, PicopassViewDictAttack);
     dict_attack_free(picopass->dict_attack);
+
+    view_dispatcher_remove_view(picopass->view_dispatcher, PicopassViewLoclass);
+    loclass_free(picopass->loclass);
 
     // Worker
     picopass_worker_stop(picopass->worker);
@@ -154,6 +171,13 @@ static const NotificationSequence picopass_sequence_blink_start_cyan = {
     NULL,
 };
 
+static const NotificationSequence picopass_sequence_blink_start_magenta = {
+    &message_blink_start_10,
+    &message_blink_set_color_magenta,
+    &message_do_not_reset,
+    NULL,
+};
+
 static const NotificationSequence picopass_sequence_blink_stop = {
     &message_blink_stop,
     NULL,
@@ -161,6 +185,10 @@ static const NotificationSequence picopass_sequence_blink_stop = {
 
 void picopass_blink_start(Picopass* picopass) {
     notification_message(picopass->notifications, &picopass_sequence_blink_start_cyan);
+}
+
+void picopass_blink_emulate_start(Picopass* picopass) {
+    notification_message(picopass->notifications, &picopass_sequence_blink_start_magenta);
 }
 
 void picopass_blink_stop(Picopass* picopass) {
@@ -183,7 +211,7 @@ void picopass_show_loading_popup(void* context, bool show) {
 
 static void picopass_migrate_from_old_folder() {
     Storage* storage = furi_record_open(RECORD_STORAGE);
-    storage_common_migrate(storage, "/ext/picopass", STORAGE_APP_DATA_PATH_PREFIX);
+    storage_common_migrate(storage, EXT_PATH("picopass"), STORAGE_APP_DATA_PATH_PREFIX);
     furi_record_close(RECORD_STORAGE);
 }
 
@@ -201,7 +229,6 @@ int32_t picopass_app(void* p) {
     UNUSED(p);
     picopass_migrate_from_old_folder();
 
-    DOLPHIN_DEED(DolphinDeedPluginStart);
     Picopass* picopass = picopass_alloc();
 
     scene_manager_next_scene(picopass->scene_manager, PicopassSceneStart);

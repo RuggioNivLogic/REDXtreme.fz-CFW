@@ -1,4 +1,4 @@
-#include "favorite_timeout.h"
+#include "archive_helpers_ext.h"
 #include <xtreme.h>
 
 bool process_favorite_launch(char** args) {
@@ -17,7 +17,7 @@ void favorite_timeout_callback(void* _ctx) {
 }
 
 void favorite_timeout_run(ViewDispatcher* view_dispatcher, SceneManager* scene_manager) {
-    int32_t timeout = XTREME_SETTINGS()->favorite_timeout;
+    uint32_t timeout = XTREME_SETTINGS()->favorite_timeout;
     if(timeout == 0) {
         view_dispatcher_run(view_dispatcher);
         return;

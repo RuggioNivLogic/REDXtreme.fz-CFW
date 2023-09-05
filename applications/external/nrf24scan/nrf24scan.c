@@ -12,14 +12,13 @@
 #include <dolphin/dolphin.h>
 #include <nrf24.h>
 #include <u8g2.h>
-#include <dolphin/dolphin.h>
 
 #define TAG "nrf24scan"
 #define VERSION "2.2"
 #define MAX_CHANNEL 125
 #define MAX_ADDR 6
 
-#define SCAN_APP_PATH_FOLDER "/ext/nrf24scan"
+#define SCAN_APP_PATH_FOLDER STORAGE_APP_DATA_PATH_PREFIX
 #define SETTINGS_FILENAME "addresses.txt" // Settings file format (1 parameter per line):
 // SNIFF - if present then sniff mode
 // Rate: 0/1/2 - rate in Mbps (=0.25/1/2)
@@ -1332,7 +1331,6 @@ static void render_callback(Canvas* const canvas, void* ctx) {
 int32_t nrf24scan_app(void* p) {
     UNUSED(p);
     APP = malloc(sizeof(Nrf24Scan));
-    DOLPHIN_DEED(DolphinDeedPluginStart);
     APP->event_queue = furi_message_queue_alloc(8, sizeof(PluginEvent));
     PluginState* plugin_state = malloc(sizeof(PluginState));
     plugin_state->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
@@ -1373,6 +1371,7 @@ int32_t nrf24scan_app(void* p) {
     gui_add_view_port(APP->gui, APP->view_port, GuiLayerFullscreen);
     APP->notification = furi_record_open(RECORD_NOTIFICATION);
     APP->storage = furi_record_open(RECORD_STORAGE);
+    storage_common_migrate(APP->storage, EXT_PATH("nrf24scan"), SCAN_APP_PATH_FOLDER);
     storage_common_mkdir(APP->storage, SCAN_APP_PATH_FOLDER);
     Stream* file_stream = file_stream_alloc(APP->storage);
     FuriString* path = furi_string_alloc();
@@ -1436,8 +1435,13 @@ int32_t nrf24scan_app(void* p) {
                             else
                                 menu_selected = 0;
                         } else if(what_doing == 1) {
-                            view_log_arr_idx += event.input.type == InputTypeRepeat ? 10 : 1;
-                            if(view_log_arr_idx >= log_arr_idx) view_log_arr_idx = log_arr_idx - 1;
+                            if(log_arr_idx == 0)
+                                view_log_arr_idx = 0;
+                            else {
+                                view_log_arr_idx += event.input.type == InputTypeRepeat ? 10 : 1;
+                                if(view_log_arr_idx >= log_arr_idx)
+                                    view_log_arr_idx = log_arr_idx - 1;
+                            }
                         } else if(what_doing == 2) {
                             if(view_found < found_total / 7) view_found++;
                         }

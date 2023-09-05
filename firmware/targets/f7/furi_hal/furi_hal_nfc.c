@@ -134,36 +134,21 @@ bool furi_hal_nfc_detect(FuriHalNfcDevData* nfc_data, uint32_t timeout) {
     if(detected) {
         if(dev_list[0].type == RFAL_NFC_LISTEN_TYPE_NFCA) {
             nfc_data->type = FuriHalNfcTypeA;
-            nfc_data->a_data.atqa[0] = dev_list[0].dev.nfca.sensRes.anticollisionInfo;
-            nfc_data->a_data.atqa[1] = dev_list[0].dev.nfca.sensRes.platformInfo;
-            nfc_data->a_data.sak = dev_list[0].dev.nfca.selRes.sak;
+            nfc_data->atqa[0] = dev_list[0].dev.nfca.sensRes.anticollisionInfo;
+            nfc_data->atqa[1] = dev_list[0].dev.nfca.sensRes.platformInfo;
+            nfc_data->sak = dev_list[0].dev.nfca.selRes.sak;
             uint8_t* cuid_start = dev_list[0].nfcid;
             if(dev_list[0].nfcidLen == 7) {
                 cuid_start = &dev_list[0].nfcid[3];
             }
-            nfc_data->a_data.cuid = (cuid_start[0] << 24) | (cuid_start[1] << 16) |
-                                    (cuid_start[2] << 8) | (cuid_start[3]);
+            nfc_data->cuid = (cuid_start[0] << 24) | (cuid_start[1] << 16) | (cuid_start[2] << 8) |
+                             (cuid_start[3]);
         } else if(
             dev_list[0].type == RFAL_NFC_LISTEN_TYPE_NFCB ||
             dev_list[0].type == RFAL_NFC_LISTEN_TYPE_ST25TB) {
             nfc_data->type = FuriHalNfcTypeB;
         } else if(dev_list[0].type == RFAL_NFC_LISTEN_TYPE_NFCF) {
             nfc_data->type = FuriHalNfcTypeF;
-            furi_assert(dev_list[0].nfcidLen == RFAL_NFCF_NFCID2_LEN);
-            memcpy(
-                &nfc_data->f_data.pmm[0],
-                dev_list[0].dev.nfcf.sensfRes.PAD0,
-                RFAL_NFCF_SENSF_RES_PAD0_LEN);
-            memcpy(
-                &nfc_data->f_data.pmm[RFAL_NFCF_SENSF_RES_PAD0_LEN],
-                dev_list[0].dev.nfcf.sensfRes.PAD1,
-                RFAL_NFCF_SENSF_RES_PAD1_LEN);
-            nfc_data->f_data.pmm[RFAL_NFCF_SENSF_RES_PAD0_LEN + RFAL_NFCF_SENSF_RES_PAD1_LEN] =
-                dev_list[0].dev.nfcf.sensfRes.MRTIcheck;
-            nfc_data->f_data.pmm[RFAL_NFCF_SENSF_RES_PAD0_LEN + RFAL_NFCF_SENSF_RES_PAD1_LEN + 1] =
-                dev_list[0].dev.nfcf.sensfRes.MRTIupdate;
-            nfc_data->f_data.pmm[RFAL_NFCF_SENSF_RES_PAD0_LEN + RFAL_NFCF_SENSF_RES_PAD1_LEN + 2] =
-                dev_list[0].dev.nfcf.sensfRes.PAD2;
         } else if(dev_list[0].type == RFAL_NFC_LISTEN_TYPE_NFCV) {
             nfc_data->type = FuriHalNfcTypeV;
         }
@@ -386,15 +371,15 @@ void furi_hal_nfc_listen_start(FuriHalNfcDevData* nfc_data) {
     // Write PT Memory
     uint8_t pt_memory[15] = {};
     memcpy(pt_memory, nfc_data->uid, nfc_data->uid_len);
-    pt_memory[10] = nfc_data->a_data.atqa[0];
-    pt_memory[11] = nfc_data->a_data.atqa[1];
+    pt_memory[10] = nfc_data->atqa[0];
+    pt_memory[11] = nfc_data->atqa[1];
     if(nfc_data->uid_len == 4) {
-        pt_memory[12] = nfc_data->a_data.sak & ~FURI_HAL_NFC_UID_INCOMPLETE;
+        pt_memory[12] = nfc_data->sak & ~FURI_HAL_NFC_UID_INCOMPLETE;
     } else {
         pt_memory[12] = FURI_HAL_NFC_UID_INCOMPLETE;
     }
-    pt_memory[13] = nfc_data->a_data.sak & ~FURI_HAL_NFC_UID_INCOMPLETE;
-    pt_memory[14] = nfc_data->a_data.sak & ~FURI_HAL_NFC_UID_INCOMPLETE;
+    pt_memory[13] = nfc_data->sak & ~FURI_HAL_NFC_UID_INCOMPLETE;
+    pt_memory[14] = nfc_data->sak & ~FURI_HAL_NFC_UID_INCOMPLETE;
 
     st25r3916WritePTMem(pt_memory, sizeof(pt_memory));
     // Go to sense
@@ -482,7 +467,7 @@ bool furi_hal_nfc_emulate_nfca(
                     buff_tx,
                     buff_tx_len,
                     buff_rx,
-                    sizeof(buff_rx),
+                    rfalConvBytesToBits(buff_rx_size),
                     &buff_rx_len,
                     data_type,
                     RFAL_FWT_NONE);
@@ -506,7 +491,7 @@ bool furi_hal_nfc_emulate_nfca(
                         buff_tx,
                         buff_tx_len,
                         buff_rx,
-                        sizeof(buff_rx),
+                        rfalConvBytesToBits(buff_rx_size),
                         &buff_rx_len,
                         data_type,
                         RFAL_FWT_NONE);
@@ -716,7 +701,9 @@ bool furi_hal_nfc_tx_rx(FuriHalNfcTxRxContext* tx_rx, uint16_t timeout_ms) {
         rfalNfcWorker();
         state = rfalNfcGetState();
         ret = rfalNfcDataExchangeGetStatus();
-        if(ret == ERR_BUSY) {
+        if(ret == ERR_WRONG_STATE) {
+            return false;
+        } else if(ret == ERR_BUSY) {
             if(DWT->CYCCNT - start > timeout_ms * clocks_in_ms) {
                 FURI_LOG_D(TAG, "Timeout during data exchange");
                 return false;
@@ -833,4 +820,18 @@ FuriHalNfcReturn furi_hal_nfc_ll_txrx_bits(
 
 void furi_hal_nfc_ll_poll() {
     rfalWorker();
+}
+
+void furi_hal_nfc_field_detect_start() {
+    st25r3916WriteRegister(
+        ST25R3916_REG_OP_CONTROL,
+        ST25R3916_REG_OP_CONTROL_en | ST25R3916_REG_OP_CONTROL_en_fd_mask);
+    st25r3916WriteRegister(ST25R3916_REG_MODE, ST25R3916_REG_MODE_targ | ST25R3916_REG_MODE_om0);
+}
+
+bool furi_hal_nfc_field_is_present() {
+    return st25r3916CheckReg(
+        ST25R3916_REG_AUX_DISPLAY,
+        ST25R3916_REG_AUX_DISPLAY_efd_o,
+        ST25R3916_REG_AUX_DISPLAY_efd_o);
 }

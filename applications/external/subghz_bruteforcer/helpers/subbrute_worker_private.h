@@ -21,6 +21,8 @@ struct SubBruteWorker {
     SubGhzEnvironment* environment;
     SubGhzTransmitter* transmitter;
     const char* protocol_name;
+    uint8_t tx_timeout_ms;
+    const SubGhzDevice* radio_device;
 
     // Initiated values
     SubBruteAttacks attack; // Attack state

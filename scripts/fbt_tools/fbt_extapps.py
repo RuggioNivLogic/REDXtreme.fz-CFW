@@ -3,7 +3,7 @@ import os
 import pathlib
 import shutil
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Dict, List
 
 import SCons.Warnings
 from ansi.color import fg
@@ -11,7 +11,7 @@ from fbt.appmanifest import FlipperApplication, FlipperAppType, FlipperManifestE
 from fbt.elfmanifest import assemble_manifest_data
 from fbt.fapassets import FileBundler
 from fbt.sdk.cache import SdkCache
-from fbt.util import extract_abs_dir_path
+from fbt.util import resolve_real_dir_node
 from SCons.Action import Action
 from SCons.Builder import Builder
 from SCons.Errors import UserError
@@ -50,7 +50,13 @@ class AppBuilder:
 
     def _setup_app_env(self):
         self.app_env = self.fw_env.Clone(
-            FAP_SRC_DIR=self.app._appdir, FAP_WORK_DIR=self.app_work_dir
+            FAP_SRC_DIR=self.app._appdir,
+            FAP_WORK_DIR=self.app_work_dir,
+        )
+        self.app_env.Append(
+            CPPDEFINES=[
+                ("FAP_VERSION", f'"{".".join(map(str, self.app.fap_version))}"')
+            ],
         )
         self.app_env.VariantDir(self.app_work_dir, self.app._appdir, duplicate=False)
 
@@ -119,7 +125,7 @@ class AppBuilder:
             CPPDEFINES=lib_def.cdefines,
             CPPPATH=list(
                 map(
-                    lambda cpath: extract_abs_dir_path(self.app._appdir.Dir(cpath)),
+                    lambda cpath: resolve_real_dir_node(self.app._appdir.Dir(cpath)),
                     lib_def.cincludes,
                 )
             ),
@@ -133,7 +139,7 @@ class AppBuilder:
     def _build_app(self):
         self.app_env.Append(
             LIBS=[*self.app.fap_libs, *self.private_libs],
-            CPPPATH=self.app_env.Dir(self.app_work_dir),
+            CPPPATH=[self.app_env.Dir(self.app_work_dir), self.app._appdir],
         )
 
         app_sources = list(
@@ -176,7 +182,7 @@ class AppBuilder:
                         deployable = False
                 app_artifacts.dist_entries.append((deployable, fal_path))
         else:
-            fap_path = f"apps/{'.Main' if self.app.apptype == FlipperAppType.EXTMAINAPP else self.app.fap_category}/{app_artifacts.compact.name}"
+            fap_path = f"apps/{self.app.fap_category}/{app_artifacts.compact.name}"
             app_artifacts.dist_entries.append(
                 (self.app.is_default_deployable, fap_path)
             )
@@ -384,32 +390,42 @@ def generate_embed_app_metadata_actions(source, target, env, for_signature):
         "${SOURCES} ${TARGET}"
     )
 
-    actions.append(
-        Action(
-            objcopy_str,
-            "$APPMETAEMBED_COMSTR",
+    actions.extend(
+        (
+            Action(
+                objcopy_str,
+                "$APPMETAEMBED_COMSTR",
+            ),
+            Action(
+                "${PYTHON3} ${FBT_SCRIPT_DIR}/fastfap.py ${TARGET} ${OBJCOPY}",
+                "$FASTFAP_COMSTR",
+            ),
         )
     )
 
     return Action(actions)
 
 
-def AddAppLaunchTarget(env, appname, launch_target_name):
-    deploy_sources, flipp_dist_paths, validators = [], [], []
-    run_script_extra_ars = ""
+@dataclass
+class AppDeploymentComponents:
+    deploy_sources: Dict[str, object] = field(default_factory=dict)
+    validators: List[object] = field(default_factory=list)
+    extra_launch_args: str = ""
 
-    def _add_dist_targets(app_artifacts):
-        validators.append(app_artifacts.validator)
+    def add_app(self, app_artifacts):
         for _, ext_path in app_artifacts.dist_entries:
-            deploy_sources.append(app_artifacts.compact)
-            flipp_dist_paths.append(f"/ext/{ext_path}")
-        return app_artifacts
+            self.deploy_sources[f"/ext/{ext_path}"] = app_artifacts.compact
+        self.validators.append(app_artifacts.validator)
+
+
+def _gather_app_components(env, appname) -> AppDeploymentComponents:
+    components = AppDeploymentComponents()
 
     def _add_host_app_to_targets(host_app):
         artifacts_app_to_run = env["EXT_APPS"].get(host_app.appid, None)
-        _add_dist_targets(artifacts_app_to_run)
+        components.add_app(artifacts_app_to_run)
         for plugin in host_app._plugins:
-            _add_dist_targets(env["EXT_APPS"].get(plugin.appid, None))
+            components.add_app(env["EXT_APPS"].get(plugin.appid, None))
 
     artifacts_app_to_run = env.GetExtAppByIdOrPath(appname)
     if artifacts_app_to_run.app.apptype == FlipperAppType.PLUGIN:
@@ -417,33 +433,45 @@ def AddAppLaunchTarget(env, appname, launch_target_name):
         host_app = env["APPMGR"].get(artifacts_app_to_run.app.requires[0])
 
         if host_app:
-            if host_app.apptype == FlipperAppType.EXTERNAL:
-                _add_host_app_to_targets(host_app)
+            if host_app.apptype in [
+                FlipperAppType.EXTERNAL,
+                FlipperAppType.MENUEXTERNAL,
+            ]:
+                components.add_app(host_app)
             else:
                 # host app is a built-in app
-                run_script_extra_ars = f"-a {host_app.name}"
-                _add_dist_targets(artifacts_app_to_run)
+                components.add_app(artifacts_app_to_run)
+                components.extra_launch_args = f"-a {host_app.name}"
         else:
             raise UserError("Host app is unknown")
     else:
         _add_host_app_to_targets(artifacts_app_to_run.app)
+    return components
 
-    # print(deploy_sources, flipp_dist_paths)
-    env.PhonyTarget(
+
+def AddAppLaunchTarget(env, appname, launch_target_name):
+    components = _gather_app_components(env, appname)
+    target = env.PhonyTarget(
         launch_target_name,
-        '${PYTHON3} "${APP_RUN_SCRIPT}" ${EXTRA_ARGS} -s ${SOURCES} -t ${FLIPPER_FILE_TARGETS}',
-        source=deploy_sources,
-        FLIPPER_FILE_TARGETS=flipp_dist_paths,
-        EXTRA_ARGS=run_script_extra_ars,
+        '${PYTHON3} "${APP_RUN_SCRIPT}" -p ${FLIP_PORT} ${EXTRA_ARGS} -s ${SOURCES} -t ${FLIPPER_FILE_TARGETS}',
+        source=components.deploy_sources.values(),
+        FLIPPER_FILE_TARGETS=components.deploy_sources.keys(),
+        EXTRA_ARGS=components.extra_launch_args,
     )
-    env.Alias(launch_target_name, validators)
+    env.Alias(launch_target_name, components.validators)
+    return target
+
+
+def AddAppBuildTarget(env, appname, build_target_name):
+    components = _gather_app_components(env, appname)
+    env.Alias(build_target_name, components.validators)
+    env.Alias(build_target_name, components.deploy_sources.values())
 
 
 def generate(env, **kw):
     env.SetDefault(
         EXT_APPS_WORK_DIR="${FBT_FAP_DEBUG_ELF_ROOT}",
         APP_RUN_SCRIPT="${FBT_SCRIPT_DIR}/runfap.py",
-        STORAGE_SCRIPT="${FBT_SCRIPT_DIR}/storage.py",
     )
     if not env["VERBOSE"]:
         env.SetDefault(
@@ -451,6 +479,7 @@ def generate(env, **kw):
             APPMETA_COMSTR="\tAPPMETA\t${TARGET}",
             APPFILE_COMSTR="\tAPPFILE\t${TARGET}",
             APPMETAEMBED_COMSTR="\tFAP\t${TARGET}",
+            FASTFAP_COMSTR="\tFASTFAP\t${TARGET}",
             APPCHECK_COMSTR="\tAPPCHK\t${SOURCE}",
         )
 
@@ -465,6 +494,7 @@ def generate(env, **kw):
     env.AddMethod(BuildAppElf)
     env.AddMethod(GetExtAppByIdOrPath)
     env.AddMethod(AddAppLaunchTarget)
+    env.AddMethod(AddAppBuildTarget)
 
     env.Append(
         BUILDERS={

@@ -2,6 +2,10 @@
 
 #include "nfc_device.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct NfcWorker NfcWorker;
 
 typedef enum {
@@ -38,14 +42,13 @@ typedef enum {
     NfcWorkerEventReadUidNfcV,
     NfcWorkerEventReadUidNfcF,
     NfcWorkerEventReadUidNfcA,
-    NfcWorkerEventReadFelica,
     NfcWorkerEventReadMfUltralight,
     NfcWorkerEventReadMfDesfire,
     NfcWorkerEventReadMfClassicDone,
     NfcWorkerEventReadMfClassicLoadKeyCache,
     NfcWorkerEventReadMfClassicDictAttackRequired,
-    NfcWorkerEventReadNfcV,
     NfcWorkerEventReadBankCard,
+    NfcWorkerEventReadNfcV,
 
     // Nfc worker common events
     NfcWorkerEventSuccess,
@@ -100,3 +103,7 @@ void nfc_worker_stop(NfcWorker* nfc_worker);
 void nfc_worker_nfcv_unlock(NfcWorker* nfc_worker);
 void nfc_worker_nfcv_emulate(NfcWorker* nfc_worker);
 void nfc_worker_nfcv_sniff(NfcWorker* nfc_worker);
+
+#ifdef __cplusplus
+}
+#endif

@@ -2,7 +2,9 @@
 #include <furi_hal_usb_i.h>
 #include <furi_hal_usb.h>
 #include <furi_hal_power.h>
+
 #include <stm32wbxx_ll_pwr.h>
+#include <stm32wbxx_ll_rcc.h>
 #include <furi.h>
 #include <toolbox/api_lock.h>
 
@@ -15,6 +17,7 @@
 typedef enum {
     UsbApiEventTypeSetConfig,
     UsbApiEventTypeGetConfig,
+    UsbApiEventTypeGetConfigContext,
     UsbApiEventTypeLock,
     UsbApiEventTypeUnlock,
     UsbApiEventTypeIsLocked,
@@ -86,6 +89,8 @@ static void wkup_evt(usbd_device* dev, uint8_t event, uint8_t ep);
 
 /* Low-level init */
 void furi_hal_usb_init(void) {
+    LL_RCC_SetUSBClockSource(LL_RCC_USB_CLKSOURCE_PLLSAI1);
+
     LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
     LL_PWR_EnableVddUSB();
 
@@ -98,7 +103,10 @@ void furi_hal_usb_init(void) {
     LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     usbd_init(&udev, &usbd_hw, USB_EP0_SIZE, ubuf, sizeof(ubuf));
+
+    FURI_CRITICAL_ENTER();
     usbd_enable(&udev, true);
+    FURI_CRITICAL_EXIT();
 
     usbd_reg_descr(&udev, usb_descriptor_get);
     usbd_reg_event(&udev, usbd_evt_susp, susp_evt);
@@ -154,6 +162,21 @@ FuriHalUsbInterface* furi_hal_usb_get_config() {
     UsbApiEventMessage msg = {
         .lock = api_lock_alloc_locked(),
         .type = UsbApiEventTypeGetConfig,
+        .return_data = &return_data,
+    };
+
+    furi_hal_usb_send_message(&msg);
+    return return_data.void_value;
+}
+
+void* furi_hal_usb_get_config_context() {
+    UsbApiEventReturnData return_data = {
+        .void_value = NULL,
+    };
+
+    UsbApiEventMessage msg = {
+        .lock = api_lock_alloc_locked(),
+        .type = UsbApiEventTypeGetConfigContext,
         .return_data = &return_data,
     };
 
@@ -359,8 +382,10 @@ static void usb_process_mode_reinit() {
     usbd_connect(&udev, false);
     usb.enabled = false;
 
+    FURI_CRITICAL_ENTER();
     usbd_enable(&udev, false);
     usbd_enable(&udev, true);
+    FURI_CRITICAL_EXIT();
 
     furi_delay_ms(USB_RECONNECT_DELAY);
     usb_process_mode_start(usb.interface, usb.interface_context);
@@ -401,6 +426,9 @@ static void usb_process_message(UsbApiEventMessage* message) {
         break;
     case UsbApiEventTypeGetConfig:
         message->return_data->void_value = usb.interface;
+        break;
+    case UsbApiEventTypeGetConfigContext:
+        message->return_data->void_value = usb.interface_context;
         break;
     case UsbApiEventTypeLock:
         FURI_LOG_I(TAG, "Mode lock");

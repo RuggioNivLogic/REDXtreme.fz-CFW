@@ -1,4 +1,5 @@
 #include <furi_hal_resources.h>
+#include <furi_hal_bus.h>
 #include <furi.h>
 
 #include <stm32wbxx_ll_rcc.h>
@@ -118,21 +119,31 @@ static void furi_hal_resources_init_input_pins(GpioMode mode) {
 }
 
 void furi_hal_resources_init_early() {
+    furi_hal_bus_enable(FuriHalBusGPIOA);
+    furi_hal_bus_enable(FuriHalBusGPIOB);
+    furi_hal_bus_enable(FuriHalBusGPIOC);
+    furi_hal_bus_enable(FuriHalBusGPIOD);
+    furi_hal_bus_enable(FuriHalBusGPIOE);
+    furi_hal_bus_enable(FuriHalBusGPIOH);
+
     furi_hal_resources_init_input_pins(GpioModeInput);
+
+    // Explicit, surviving reset, pulls
+    LL_PWR_EnablePUPDCfg();
+    LL_PWR_EnableGPIOPullDown(LL_PWR_GPIO_A, LL_PWR_GPIO_BIT_8); // gpio_vibro
+    LL_PWR_EnableGPIOPullDown(LL_PWR_GPIO_B, LL_PWR_GPIO_BIT_8); // gpio_speaker
 
     // SD Card stepdown control
     furi_hal_gpio_write(&gpio_periph_power, 1);
     furi_hal_gpio_init(&gpio_periph_power, GpioModeOutputOpenDrain, GpioPullNo, GpioSpeedLow);
 
     // Display pins
-    furi_hal_gpio_write(&gpio_display_rst_n, 1);
+    furi_hal_gpio_write(&gpio_display_rst_n, 0);
     furi_hal_gpio_init_simple(&gpio_display_rst_n, GpioModeOutputPushPull);
-    furi_hal_gpio_init(&gpio_display_di, GpioModeOutputPushPull, GpioPullNo, GpioSpeedLow);
-
-    // Pullup display reset pin for shutdown
-    SET_BIT(PWR->PUCRB, gpio_display_rst_n.pin);
-    CLEAR_BIT(PWR->PDCRB, gpio_display_rst_n.pin);
-    SET_BIT(PWR->CR3, PWR_CR3_APC);
+    LL_PWR_EnableGPIOPullUp(LL_PWR_GPIO_B, LL_PWR_GPIO_BIT_0); // gpio_display_rst_n
+    furi_hal_gpio_write(&gpio_display_di, 0);
+    furi_hal_gpio_init_simple(&gpio_display_di, GpioModeOutputPushPull);
+    LL_PWR_EnableGPIOPullDown(LL_PWR_GPIO_B, LL_PWR_GPIO_BIT_1); // gpio_display_di
 
     // Hard reset USB
     furi_hal_gpio_write(&gpio_usb_dm, 1);
@@ -162,23 +173,17 @@ void furi_hal_resources_init_early() {
 
 void furi_hal_resources_deinit_early() {
     furi_hal_resources_init_input_pins(GpioModeAnalog);
+    furi_hal_bus_disable(FuriHalBusGPIOA);
+    furi_hal_bus_disable(FuriHalBusGPIOB);
+    furi_hal_bus_disable(FuriHalBusGPIOC);
+    furi_hal_bus_disable(FuriHalBusGPIOD);
+    furi_hal_bus_disable(FuriHalBusGPIOE);
+    furi_hal_bus_disable(FuriHalBusGPIOH);
 }
 
 void furi_hal_resources_init() {
     // Button pins
     furi_hal_resources_init_input_pins(GpioModeInterruptRiseFall);
-
-    // Explicit pulls pins
-    LL_PWR_EnablePUPDCfg();
-    LL_PWR_EnableGPIOPullDown(LL_PWR_GPIO_B, LL_PWR_GPIO_BIT_8); // gpio_speaker
-    LL_PWR_EnableGPIOPullDown(LL_PWR_GPIO_A, LL_PWR_GPIO_BIT_8); // gpio_vibro
-
-    // Display pins
-    furi_hal_gpio_init(&gpio_display_rst_n, GpioModeOutputPushPull, GpioPullNo, GpioSpeedLow);
-    furi_hal_gpio_write(&gpio_display_rst_n, 0);
-
-    furi_hal_gpio_init(&gpio_display_di, GpioModeOutputPushPull, GpioPullNo, GpioSpeedLow);
-    furi_hal_gpio_write(&gpio_display_di, 0);
 
     // SD pins
     furi_hal_gpio_init(&gpio_sdcard_cd, GpioModeInput, GpioPullNo, GpioSpeedLow);
@@ -211,7 +216,7 @@ void furi_hal_resources_init() {
 }
 
 int32_t furi_hal_resources_get_ext_pin_number(const GpioPin* gpio) {
-    // TODO: describe second ROW
+    // TODO FL-3500: describe second ROW
     if(gpio == &gpio_ext_pa7)
         return 2;
     else if(gpio == &gpio_ext_pa6)

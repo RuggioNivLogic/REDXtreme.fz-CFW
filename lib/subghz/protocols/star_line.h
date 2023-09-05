@@ -2,10 +2,6 @@
 
 #include "base.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define SUBGHZ_PROTOCOL_STAR_LINE_NAME "Star Line"
 
 typedef struct SubGhzProtocolDecoderStarLine SubGhzProtocolDecoderStarLine;
@@ -14,10 +10,6 @@ typedef struct SubGhzProtocolEncoderStarLine SubGhzProtocolEncoderStarLine;
 extern const SubGhzProtocolDecoder subghz_protocol_star_line_decoder;
 extern const SubGhzProtocolEncoder subghz_protocol_star_line_encoder;
 extern const SubGhzProtocol subghz_protocol_star_line;
-
-void star_line_reset_mfname();
-
-void star_line_reset_kl_type();
 
 /**
  * Allocate SubGhzProtocolEncoderStarLine.
@@ -135,7 +127,3 @@ SubGhzProtocolStatus
  * @param output Resulting text
  */
 void subghz_protocol_decoder_star_line_get_string(void* context, FuriString* output);
-
-#ifdef __cplusplus
-}
-#endif

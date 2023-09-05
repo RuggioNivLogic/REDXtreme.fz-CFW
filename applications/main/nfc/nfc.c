@@ -1,7 +1,7 @@
 #include "nfc_i.h"
 #include <furi_hal_nfc.h>
 #include <dolphin/dolphin.h>
-#include <applications/main/archive/helpers/favorite_timeout.h>
+#include <applications/main/archive/helpers/archive_helpers_ext.h>
 
 bool nfc_custom_event_callback(void* context, uint32_t event) {
     furi_assert(context);
@@ -287,19 +287,19 @@ int32_t nfc_app(char* p) {
             if(nfc_device_load(nfc->dev, p, true)) {
                 if(nfc->dev->format == NfcDeviceSaveFormatMifareUl) {
                     scene_manager_next_scene(nfc->scene_manager, NfcSceneMfUltralightEmulate);
-                    DOLPHIN_DEED(DolphinDeedNfcEmulate);
+                    dolphin_deed(DolphinDeedNfcEmulate);
                 } else if(nfc->dev->format == NfcDeviceSaveFormatMifareClassic) {
                     scene_manager_next_scene(nfc->scene_manager, NfcSceneMfClassicEmulate);
-                    DOLPHIN_DEED(DolphinDeedNfcEmulate);
+                    dolphin_deed(DolphinDeedNfcEmulate);
                 } else if(nfc->dev->format == NfcDeviceSaveFormatNfcV) {
                     scene_manager_next_scene(nfc->scene_manager, NfcSceneNfcVEmulate);
-                    DOLPHIN_DEED(DolphinDeedNfcEmulate);
+                    dolphin_deed(DolphinDeedNfcEmulate);
                 } else if(nfc->dev->format == NfcDeviceSaveFormatBankCard) {
                     scene_manager_next_scene(nfc->scene_manager, NfcSceneDeviceInfo);
-                    DOLPHIN_DEED(DolphinDeedNfcEmulate);
+                    dolphin_deed(DolphinDeedNfcEmulate);
                 } else {
                     scene_manager_next_scene(nfc->scene_manager, NfcSceneEmulateUid);
-                    DOLPHIN_DEED(DolphinDeedNfcEmulate);
+                    dolphin_deed(DolphinDeedNfcEmulate);
                 }
             } else {
                 // Exit app

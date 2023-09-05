@@ -27,12 +27,8 @@ extern FuriHalSpiBus furi_hal_spi_bus_r;
 /** Furi Hal Spi Bus D (Display, SdCard) */
 extern FuriHalSpiBus furi_hal_spi_bus_d;
 
-/** CC1101 on current SPI bus */
-extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_subghz;
 /** CC1101 on `furi_hal_spi_bus_r` */
-extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_subghz_int;
-/** CC1101 on external `furi_hal_spi_bus_r` */
-extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_subghz_ext;
+extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_subghz;
 
 /** ST25R3916 on `furi_hal_spi_bus_r` */
 extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_nfc;
@@ -50,6 +46,20 @@ extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_nfc;
  * 
  */
 extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_external;
+
+/** External on `furi_hal_spi_bus_r`
+ * Preset: `furi_hal_spi_preset_1edge_low_2m`
+ * 
+ * miso: pa6
+ * mosi: pa7
+ * sck: pb3
+ * cs:  pc3 (software controlled)
+ * 
+ * @warning not initialized by default, call `furi_hal_spi_bus_handle_init` to initialize
+ * Bus pins are floating on inactive state, CS high after initialization
+ * 
+ */
+extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_external_extra;
 
 /** ST7567(Display) on `furi_hal_spi_bus_d` */
 extern FuriHalSpiBusHandle furi_hal_spi_bus_handle_display;

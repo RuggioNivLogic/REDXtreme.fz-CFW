@@ -1,6 +1,7 @@
 #include "generate_totp_code.h"
 #include <furi/core/thread.h>
-#include "../../services/crypto/crypto.h"
+#include <furi/core/check.h>
+#include "../../services/crypto/crypto_facade.h"
 #include "../../services/totp/totp.h"
 #include "../../services/convert/convert.h"
 #include <furi_hal_rtc.h>
@@ -14,14 +15,14 @@ struct TotpGenerateCodeWorkerContext {
     FuriMutex* code_buffer_sync;
     const TokenInfo* token_info;
     float timezone_offset;
-    uint8_t* iv;
+    const CryptoSettings* crypto_settings;
     TOTP_NEW_CODE_GENERATED_HANDLER on_new_code_generated_handler;
     void* on_new_code_generated_handler_context;
     TOTP_CODE_LIFETIME_CHANGED_HANDLER on_code_lifetime_changed_handler;
     void* on_code_lifetime_changed_handler_context;
 };
 
-static const char* STEAM_ALGO_ALPHABET = "23456789BCDFGHJKMNPQRTVWXY";
+static const char STEAM_ALGO_ALPHABET[] = "23456789BCDFGHJKMNPQRTVWXY";
 
 static void
     int_token_to_str(uint64_t i_token_code, char* str, TokenDigitsCount len, TokenHashAlgo algo) {
@@ -30,7 +31,7 @@ static void
     if(i_token_code == OTP_ERROR) {
         memset(str, '-', len);
     } else {
-        if(algo == STEAM) {
+        if(algo == TokenHashAlgoSteam) {
             char* s = str;
             for(uint8_t i = 0; i < len; i++, s++) {
                 *s = STEAM_ALGO_ALPHABET[i_token_code % 26];
@@ -48,12 +49,12 @@ static void
 
 static TOTP_ALGO get_totp_algo_impl(TokenHashAlgo algo) {
     switch(algo) {
-    case SHA1:
-    case STEAM:
+    case TokenHashAlgoSha1:
+    case TokenHashAlgoSteam:
         return TOTP_ALGO_SHA1;
-    case SHA256:
+    case TokenHashAlgoSha256:
         return TOTP_ALGO_SHA256;
-    case SHA512:
+    case TokenHashAlgoSha512:
         return TOTP_ALGO_SHA512;
     default:
         break;
@@ -69,7 +70,7 @@ static void generate_totp_code(
     if(token_info->token != NULL && token_info->token_length > 0) {
         size_t key_length;
         uint8_t* key = totp_crypto_decrypt(
-            token_info->token, token_info->token_length, context->iv, &key_length);
+            token_info->token, token_info->token_length, context->crypto_settings, &key_length);
 
         int_token_to_str(
             totp_at(
@@ -147,14 +148,14 @@ TotpGenerateCodeWorkerContext* totp_generate_code_worker_start(
     const TokenInfo* token_info,
     FuriMutex* code_buffer_sync,
     float timezone_offset,
-    uint8_t* iv) {
+    const CryptoSettings* crypto_settings) {
     TotpGenerateCodeWorkerContext* context = malloc(sizeof(TotpGenerateCodeWorkerContext));
     furi_check(context != NULL);
     context->code_buffer = code_buffer;
     context->token_info = token_info;
     context->code_buffer_sync = code_buffer_sync;
     context->timezone_offset = timezone_offset;
-    context->iv = iv;
+    context->crypto_settings = crypto_settings;
     context->thread = furi_thread_alloc();
     furi_thread_set_name(context->thread, "TOTPGenerateWorker");
     furi_thread_set_stack_size(context->thread, 2048);

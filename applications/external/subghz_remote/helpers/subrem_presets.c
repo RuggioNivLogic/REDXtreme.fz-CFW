@@ -8,7 +8,7 @@ SubRemSubFilePreset* subrem_sub_file_preset_alloc() {
     sub_preset->fff_data = flipper_format_string_alloc();
     sub_preset->file_path = furi_string_alloc();
     sub_preset->protocaol_name = furi_string_alloc();
-    sub_preset->label = furi_string_alloc_set_str("N/A");
+    sub_preset->label = furi_string_alloc();
 
     sub_preset->freq_preset.name = furi_string_alloc();
 
@@ -34,7 +34,7 @@ void subrem_sub_file_preset_free(SubRemSubFilePreset* sub_preset) {
 void subrem_sub_file_preset_reset(SubRemSubFilePreset* sub_preset) {
     furi_assert(sub_preset);
 
-    furi_string_set_str(sub_preset->label, "N/A");
+    furi_string_set_str(sub_preset->label, "");
     furi_string_reset(sub_preset->protocaol_name);
     furi_string_reset(sub_preset->file_path);
 
@@ -77,15 +77,15 @@ SubRemLoadSubState subrem_sub_preset_load(
             break;
         }
 
-        SubGhzSetting* setting = subghz_txrx_get_setting(txrx); // txrx->setting;
+        SubGhzSetting* setting = subghz_txrx_get_setting(txrx);
 
         //Load frequency or using default from settings
         ret = SubRemLoadSubStateErrorFreq;
         if(!flipper_format_read_uint32(fff_data_file, "Frequency", &temp_data32, 1)) {
             FURI_LOG_W(TAG, "Cannot read frequency. Set default frequency");
             sub_preset->freq_preset.frequency = subghz_setting_get_default_frequency(setting);
-        } else if(!furi_hal_subghz_is_tx_allowed(temp_data32)) {
-            FURI_LOG_E(TAG, "This frequency can only be used for RX");
+        } else if(!subghz_txrx_radio_device_is_frequency_valid(txrx, temp_data32)) {
+            FURI_LOG_E(TAG, "Frequency not supported on chosen radio module");
             break;
         }
         sub_preset->freq_preset.frequency = temp_data32;
@@ -124,7 +124,9 @@ SubRemLoadSubState subrem_sub_preset_load(
         if(!strcmp(furi_string_get_cstr(temp_str), "RAW")) {
             //if RAW
             subghz_protocol_raw_gen_fff_data(
-                fff_data, furi_string_get_cstr(sub_preset->file_path));
+                fff_data,
+                furi_string_get_cstr(sub_preset->file_path),
+                subghz_txrx_radio_device_get_name(txrx));
         } else {
             stream_copy_full(
                 flipper_format_get_raw_stream(fff_data_file),
@@ -147,8 +149,7 @@ SubRemLoadSubState subrem_sub_preset_load(
         if(protocol->flag & SubGhzProtocolFlag_Send) {
             if((protocol->type == SubGhzProtocolTypeStatic) ||
                (protocol->type == SubGhzProtocolTypeDynamic) ||
-               // TODO: BINRAW It probably works, but checks are needed.
-               // (protocol->type == SubGhzProtocolTypeBinRAW) ||
+               (protocol->type == SubGhzProtocolTypeBinRAW) ||
                (protocol->type == SubGhzProtocolTypeRAW)) {
                 sub_preset->type = protocol->type;
             } else {
@@ -175,5 +176,6 @@ SubRemLoadSubState subrem_sub_preset_load(
     } while(false);
 
     furi_string_free(temp_str);
+    sub_preset->load_state = ret;
     return ret;
 }

@@ -82,9 +82,12 @@ static DialogMessageButton icon1_screen(DialogsApp* dialogs, DialogMessage* mess
 static DialogMessageButton icon2_screen(DialogsApp* dialogs, DialogMessage* message) {
     DialogMessageButton result;
 
-    dialog_message_set_icon(message, &I_Certification2_98x33, 15, 10);
+    dialog_message_set_icon(message, &I_Certification2_46x33, 15, 10);
+    dialog_message_set_text(
+        message, furi_hal_version_get_mic_id(), 63, 27, AlignLeft, AlignCenter);
     result = dialog_message_show(dialogs, message);
     dialog_message_set_icon(message, NULL, 0, 0);
+    dialog_message_set_text(message, NULL, 0, 0, AlignLeft, AlignTop);
 
     return result;
 }
@@ -138,7 +141,7 @@ static DialogMessageButton fw_version_screen(DialogsApp* dialogs, DialogMessage*
         furi_hal_info_get_api_version(&api_major, &api_minor);
         furi_string_cat_printf(
             buffer,
-            "%s  %s\n%s  F%d  %d.%d  %s\nhttps://flipper-xtre.me/",
+            "%s   %s\n%s   F%d:%d.%d   %s\nhttps://flipper-xtre.me/",
             version_get_version(ver),
             version_get_builddate(ver),
             version_get_githash(ver),
@@ -167,8 +170,6 @@ const AboutDialogScreen about_screens[] = {
     compliance_screen,
     address_screen};
 
-const size_t about_screens_count = sizeof(about_screens) / sizeof(AboutDialogScreen);
-
 int32_t about_settings_app(void* p) {
     UNUSED(p);
     DialogsApp* dialogs = furi_record_open(RECORD_DIALOGS);
@@ -190,7 +191,7 @@ int32_t about_settings_app(void* p) {
 
     int32_t ret = 0;
     while(1) {
-        if(screen_index >= about_screens_count - 1) {
+        if(screen_index >= COUNT_OF(about_screens) - 1) {
             dialog_message_set_buttons(message, "Back", NULL, NULL);
         } else {
             dialog_message_set_buttons(message, "Back", NULL, "Next");
@@ -206,7 +207,7 @@ int32_t about_settings_app(void* p) {
                 screen_index--;
             }
         } else if(screen_result == DialogMessageButtonRight) {
-            if(screen_index < about_screens_count) {
+            if(screen_index < COUNT_OF(about_screens) - 1) {
                 screen_index++;
             }
         } else if(screen_result == DialogMessageButtonBack) {

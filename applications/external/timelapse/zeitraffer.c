@@ -5,7 +5,8 @@
 #include <notification/notification_messages.h>
 #include <flipper_format/flipper_format.h>
 #include "gpio_item.h"
-#include "GPIO_Timelapse_icons.h"
+#include "gpio_timelapse_icons.h"
+#include <assets_icons.h>
 
 #define CONFIG_FILE_DIRECTORY_PATH "/ext/apps_data/timelapse"
 #define CONFIG_FILE_PATH CONFIG_FILE_DIRECTORY_PATH "/timelapse.conf"
@@ -325,6 +326,7 @@ int32_t zeitraffer_app(void* p) {
                     }
                 }
             }
+            view_port_update(view_port);
         }
 
         // Наше событие — это сработавший таймер
@@ -378,6 +380,8 @@ int32_t zeitraffer_app(void* p) {
             default:
                 notification_message(notifications, &sequence_display_backlight_enforce_auto);
             }
+
+            view_port_update(view_port);
         }
         if(Time < 1) Time = 1; // Не даём открутить таймер меньше единицы
         if(Count < -1)

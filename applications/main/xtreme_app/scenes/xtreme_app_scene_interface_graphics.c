@@ -5,6 +5,7 @@ enum VarItemListIndex {
     VarItemListIndexAnimSpeed,
     VarItemListIndexCycleAnims,
     VarItemListIndexUnlockAnims,
+    VarItemListIndexFallbackAnim,
 };
 
 void xtreme_app_scene_interface_graphics_var_item_list_callback(void* context, uint32_t index) {
@@ -16,20 +17,44 @@ static void xtreme_app_scene_interface_graphics_asset_pack_changed(VariableItem*
     XtremeApp* app = variable_item_get_context(item);
     uint8_t index = variable_item_get_current_value_index(item);
     variable_item_set_current_value_text(
-        item, index == 0 ? "SFW" : *CharList_get(app->asset_pack_names, index - 1));
+        item, index == 0 ? "Default" : *CharList_get(app->asset_pack_names, index - 1));
     strlcpy(
         XTREME_SETTINGS()->asset_pack,
         index == 0 ? "" : *CharList_get(app->asset_pack_names, index - 1),
         XTREME_ASSETS_PACK_NAME_LEN);
     app->asset_pack_index = index;
     app->save_settings = true;
-    app->require_reboot = true;
+    app->apply_pack = true;
 }
 
-const char* const anim_speed_names[] =
-    {"25%", "50%", "75%", "100%", "125%", "150%", "175%", "200%", "225%", "250%", "275%", "300%"};
-const int32_t anim_speed_values[COUNT_OF(anim_speed_names)] =
-    {25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300};
+const char* const anim_speed_names[] = {
+    "25%",
+    "50%",
+    "75%",
+    "100%",
+    "125%",
+    "150%",
+    "175%",
+    "200%",
+    "225%",
+    "250%",
+    "275%",
+    "300%",
+};
+const uint32_t anim_speed_values[COUNT_OF(anim_speed_names)] = {
+    25,
+    50,
+    75,
+    100,
+    125,
+    150,
+    175,
+    200,
+    225,
+    250,
+    275,
+    300,
+};
 static void xtreme_app_scene_interface_graphics_anim_speed_changed(VariableItem* item) {
     XtremeApp* app = variable_item_get_context(item);
     uint8_t index = variable_item_get_current_value_index(item);
@@ -51,9 +76,23 @@ const char* const cycle_anims_names[] = {
     "2 H",
     "6 H",
     "12 H",
-    "24 H"};
-const int32_t cycle_anims_values[COUNT_OF(cycle_anims_names)] =
-    {-1, 0, 30, 60, 300, 600, 900, 1800, 3600, 7200, 21600, 43200, 86400};
+    "24 H",
+};
+const int32_t cycle_anims_values[COUNT_OF(cycle_anims_names)] = {
+    -1,
+    0,
+    30,
+    60,
+    300,
+    600,
+    900,
+    1800,
+    3600,
+    7200,
+    21600,
+    43200,
+    86400,
+};
 static void xtreme_app_scene_interface_graphics_cycle_anims_changed(VariableItem* item) {
     XtremeApp* app = variable_item_get_context(item);
     uint8_t index = variable_item_get_current_value_index(item);
@@ -95,7 +134,7 @@ void xtreme_app_scene_interface_graphics_on_enter(void* context) {
     variable_item_set_current_value_text(
         item,
         app->asset_pack_index == 0 ?
-            "SFW" :
+            "Default" :
             *CharList_get(app->asset_pack_names, app->asset_pack_index - 1));
 
     item = variable_item_list_add(
@@ -104,8 +143,8 @@ void xtreme_app_scene_interface_graphics_on_enter(void* context) {
         COUNT_OF(anim_speed_names),
         xtreme_app_scene_interface_graphics_anim_speed_changed,
         app);
-    value_index = value_index_int32(
-        xtreme_settings->anim_speed, anim_speed_values, COUNT_OF(anim_speed_names));
+    value_index = value_index_uint32(
+        xtreme_settings->anim_speed, anim_speed_values, COUNT_OF(anim_speed_values));
     variable_item_set_current_value_index(item, value_index);
     variable_item_set_current_value_text(item, anim_speed_names[value_index]);
 
@@ -116,7 +155,7 @@ void xtreme_app_scene_interface_graphics_on_enter(void* context) {
         xtreme_app_scene_interface_graphics_cycle_anims_changed,
         app);
     value_index = value_index_int32(
-        xtreme_settings->cycle_anims, cycle_anims_values, COUNT_OF(cycle_anims_names));
+        xtreme_settings->cycle_anims, cycle_anims_values, COUNT_OF(cycle_anims_values));
     variable_item_set_current_value_index(item, value_index);
     variable_item_set_current_value_text(item, cycle_anims_names[value_index]);
 
@@ -131,7 +170,7 @@ void xtreme_app_scene_interface_graphics_on_enter(void* context) {
 
     item = variable_item_list_add(
         var_item_list,
-        "Fallback Anim",
+        "Credits Anim",
         2,
         xtreme_app_scene_interface_graphics_fallback_anim_changed,
         app);

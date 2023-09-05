@@ -52,6 +52,9 @@ static void subghz_scene_read_raw_update_statusbar(void* context) {
 
     furi_string_free(frequency_str);
     furi_string_free(modulation_str);
+
+    subghz_read_raw_set_radio_device_type(
+        subghz->subghz_read_raw, subghz_txrx_radio_device_get(subghz->txrx));
 }
 
 void subghz_scene_read_raw_callback(SubGhzCustomEvent event, void* context) {
@@ -116,15 +119,17 @@ void subghz_scene_read_raw_on_enter(void* context) {
 
     // Start sending immediately with favorites
     if(subghz->fav_timeout) {
-        with_view_model(
-            subghz->subghz_read_raw->view,
-            SubGhzReadRAWModel * model,
-            {
-                scene_manager_handle_custom_event(
-                    subghz->scene_manager, SubGhzCustomEventViewReadRAWSendStart);
-                model->status = SubGhzReadRAWStatusTXRepeat;
-            },
-            true);
+        scene_manager_handle_custom_event(
+            subghz->scene_manager, SubGhzCustomEventViewReadRAWSendStart);
+        // with_view_model(
+        //     subghz->subghz_read_raw->view,
+        //     SubGhzReadRAWModel * model,
+        //     {
+        //         scene_manager_handle_custom_event(
+        //             subghz->scene_manager, SubGhzCustomEventViewReadRAWSendStart);
+        //         model->status = SubGhzReadRAWStatusTXRepeat;
+        //     },
+        //     true);
     }
 }
 
@@ -226,7 +231,7 @@ bool subghz_scene_read_raw_on_event(void* context, SceneManagerEvent event) {
                 } else {
                     if(scene_manager_has_previous_scene(subghz->scene_manager, SubGhzSceneSaved) ||
                        !scene_manager_has_previous_scene(subghz->scene_manager, SubGhzSceneStart)) {
-                        DOLPHIN_DEED(DolphinDeedSubGhzSend);
+                        dolphin_deed(DolphinDeedSubGhzSend);
                     }
                     // set callback end tx
                     subghz_txrx_set_raw_file_encoder_worker_callback_end(
@@ -267,7 +272,9 @@ bool subghz_scene_read_raw_on_event(void* context, SceneManagerEvent event) {
             furi_string_printf(
                 temp_str, "%s/%s%s", SUBGHZ_RAW_FOLDER, RAW_FILE_NAME, SUBGHZ_APP_EXTENSION);
             subghz_protocol_raw_gen_fff_data(
-                subghz_txrx_get_fff_data(subghz->txrx), furi_string_get_cstr(temp_str));
+                subghz_txrx_get_fff_data(subghz->txrx),
+                furi_string_get_cstr(temp_str),
+                subghz_txrx_radio_device_get_name(subghz->txrx));
             furi_string_free(temp_str);
 
             if(spl_count > 0) {
@@ -288,7 +295,7 @@ bool subghz_scene_read_raw_on_event(void* context, SceneManagerEvent event) {
             } else {
                 SubGhzRadioPreset preset = subghz_txrx_get_preset(subghz->txrx);
                 if(subghz_protocol_raw_save_to_file_init(decoder_raw, RAW_FILE_NAME, &preset)) {
-                    DOLPHIN_DEED(DolphinDeedSubGhzRawRec);
+                    dolphin_deed(DolphinDeedSubGhzRawRec);
                     subghz_txrx_rx_start(subghz->txrx);
                     subghz->state_notifications = SubGhzNotificationStateRx;
                     subghz_rx_key_state_set(subghz, SubGhzRxKeyStateAddKey);
@@ -327,8 +334,8 @@ bool subghz_scene_read_raw_on_event(void* context, SceneManagerEvent event) {
             subghz_read_raw_update_sample_write(
                 subghz->subghz_read_raw, subghz_protocol_raw_get_sample_write(decoder_raw));
 
-            SubGhzThresholdRssiData ret_rssi =
-                subghz_threshold_get_rssi_data(subghz->threshold_rssi);
+            SubGhzThresholdRssiData ret_rssi = subghz_threshold_get_rssi_data(
+                subghz->threshold_rssi, subghz_txrx_radio_device_get_rssi(subghz->txrx));
             subghz_read_raw_add_data_rssi(
                 subghz->subghz_read_raw, ret_rssi.rssi, ret_rssi.is_above);
             subghz_protocol_raw_save_to_file_pause(decoder_raw, !ret_rssi.is_above);

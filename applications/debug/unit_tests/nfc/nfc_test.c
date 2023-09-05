@@ -1,12 +1,10 @@
 #include <furi.h>
 #include <furi_hal.h>
-#include <stm32wbxx_ll_tim.h>
 #include <storage/storage.h>
 #include <lib/flipper_format/flipper_format.h>
 #include <lib/nfc/protocols/nfca.h>
 #include <lib/nfc/helpers/mf_classic_dict.h>
 #include <lib/digital_signal/digital_signal.h>
-#include <lib/pulse_reader/pulse_reader.h>
 #include <lib/nfc/nfc_device.h>
 #include <lib/nfc/helpers/nfc_generators.h>
 
@@ -28,6 +26,12 @@ static const uint32_t nfc_test_file_version = 1;
 
 #define NFC_TEST_DATA_MAX_LEN 18
 #define NFC_TETS_TIMINGS_MAX_LEN 1350
+
+// Maximum allowed time for buffer preparation to fit 500us nt message timeout
+#define NFC_TEST_4_BYTE_BUILD_BUFFER_TIM_MAX (150)
+#define NFC_TEST_16_BYTE_BUILD_BUFFER_TIM_MAX (640)
+#define NFC_TEST_4_BYTE_BUILD_SIGNAL_TIM_MAX (110)
+#define NFC_TEST_16_BYTE_BUILD_SIGNAL_TIM_MAX (440)
 
 typedef struct {
     Storage* storage;
@@ -91,13 +95,13 @@ static bool nfc_test_read_signal_from_file(const char* file_name) {
 
 static bool nfc_test_digital_signal_test_encode(
     const char* file_name,
-    uint32_t encode_max_time,
+    uint32_t build_signal_max_time_us,
+    uint32_t build_buffer_max_time_us,
     uint32_t timing_tolerance,
     uint32_t timings_sum_tolerance) {
     furi_assert(nfc_test);
 
     bool success = false;
-    uint32_t time = 0;
     uint32_t dut_timings_sum = 0;
     uint32_t ref_timings_sum = 0;
     uint8_t parity[10] = {};
@@ -111,17 +115,37 @@ static bool nfc_test_digital_signal_test_encode(
 
         // Encode signal
         FURI_CRITICAL_ENTER();
-        time = DWT->CYCCNT;
+        uint32_t time_start = DWT->CYCCNT;
+
         nfca_signal_encode(
             nfc_test->signal, nfc_test->test_data, nfc_test->test_data_len * 8, parity);
+
+        uint32_t time_signal =
+            (DWT->CYCCNT - time_start) / furi_hal_cortex_instructions_per_microsecond();
+
+        time_start = DWT->CYCCNT;
+
         digital_signal_prepare_arr(nfc_test->signal->tx_signal);
-        time = (DWT->CYCCNT - time) / furi_hal_cortex_instructions_per_microsecond();
+
+        uint32_t time_buffer =
+            (DWT->CYCCNT - time_start) / furi_hal_cortex_instructions_per_microsecond();
         FURI_CRITICAL_EXIT();
 
         // Check timings
-        if(time > encode_max_time) {
+        if(time_signal > build_signal_max_time_us) {
             FURI_LOG_E(
-                TAG, "Encoding time: %ld us while accepted value: %ld us", time, encode_max_time);
+                TAG,
+                "Build signal time: %ld us while accepted value: %ld us",
+                time_signal,
+                build_signal_max_time_us);
+            break;
+        }
+        if(time_buffer > build_buffer_max_time_us) {
+            FURI_LOG_E(
+                TAG,
+                "Build buffer time: %ld us while accepted value: %ld us",
+                time_buffer,
+                build_buffer_max_time_us);
             break;
         }
 
@@ -158,7 +182,16 @@ static bool nfc_test_digital_signal_test_encode(
             break;
         }
 
-        FURI_LOG_I(TAG, "Encoding time: %ld us. Acceptable time: %ld us", time, encode_max_time);
+        FURI_LOG_I(
+            TAG,
+            "Build signal time: %ld us. Acceptable time: %ld us",
+            time_signal,
+            build_signal_max_time_us);
+        FURI_LOG_I(
+            TAG,
+            "Build buffer time: %ld us. Acceptable time: %ld us",
+            time_buffer,
+            build_buffer_max_time_us);
         FURI_LOG_I(
             TAG,
             "Timings sum difference: %ld [1/64MHZ]. Acceptable difference: %ld [1/64MHz]",
@@ -173,159 +206,20 @@ static bool nfc_test_digital_signal_test_encode(
 MU_TEST(nfc_digital_signal_test) {
     mu_assert(
         nfc_test_digital_signal_test_encode(
-            NFC_TEST_RESOURCES_DIR NFC_TEST_SIGNAL_SHORT_FILE, 500, 1, 37),
+            NFC_TEST_RESOURCES_DIR NFC_TEST_SIGNAL_SHORT_FILE,
+            NFC_TEST_4_BYTE_BUILD_SIGNAL_TIM_MAX,
+            NFC_TEST_4_BYTE_BUILD_BUFFER_TIM_MAX,
+            1,
+            37),
         "NFC short digital signal test failed\r\n");
     mu_assert(
         nfc_test_digital_signal_test_encode(
-            NFC_TEST_RESOURCES_DIR NFC_TEST_SIGNAL_LONG_FILE, 2000, 1, 37),
+            NFC_TEST_RESOURCES_DIR NFC_TEST_SIGNAL_LONG_FILE,
+            NFC_TEST_16_BYTE_BUILD_SIGNAL_TIM_MAX,
+            NFC_TEST_16_BYTE_BUILD_BUFFER_TIM_MAX,
+            1,
+            37),
         "NFC long digital signal test failed\r\n");
-}
-
-static bool nfc_test_pulse_reader_toggle(
-    uint32_t usec_low,
-    uint32_t usec_high,
-    uint32_t period_count,
-    uint32_t tolerance) {
-    furi_assert(nfc_test);
-
-    bool success = false;
-    uint32_t pulses = 0;
-    const GpioPin* gpio_in = &gpio_ext_pa6;
-    const GpioPin* gpio_out = &gpio_ext_pa7;
-    PulseReader* reader = NULL;
-
-    do {
-        reader = pulse_reader_alloc(gpio_in, 512);
-
-        if(!reader) {
-            FURI_LOG_E(TAG, "failed to allocate pulse reader");
-            break;
-        }
-
-        /* use TIM1 to create a specific number of pulses with defined duty cycle 
-           but first set the IO to high, so the low/high pulse can get detected */
-        furi_hal_gpio_init(gpio_out, GpioModeOutputPushPull, GpioPullNo, GpioSpeedVeryHigh);
-        furi_hal_gpio_write(gpio_out, true);
-
-        LL_TIM_DeInit(TIM1);
-
-        LL_TIM_SetCounterMode(TIM1, LL_TIM_COUNTERMODE_UP);
-        LL_TIM_SetRepetitionCounter(TIM1, 0);
-        LL_TIM_SetClockDivision(TIM1, LL_TIM_CLOCKDIVISION_DIV1);
-        LL_TIM_SetClockSource(TIM1, LL_TIM_CLOCKSOURCE_INTERNAL);
-        LL_TIM_DisableARRPreload(TIM1);
-
-        LL_TIM_OC_DisablePreload(TIM1, LL_TIM_CHANNEL_CH1);
-        LL_TIM_OC_SetMode(TIM1, LL_TIM_CHANNEL_CH1, LL_TIM_OCMODE_PWM2);
-        LL_TIM_OC_SetPolarity(TIM1, LL_TIM_CHANNEL_CH1N, LL_TIM_OCPOLARITY_HIGH);
-        LL_TIM_OC_DisableFast(TIM1, LL_TIM_CHANNEL_CH1);
-        LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1N);
-
-        LL_TIM_EnableAllOutputs(TIM1);
-
-        /* now calculate the TIM1 period and compare values */
-        uint32_t freq_div = 64 * (usec_low + usec_high);
-        uint32_t prescaler = freq_div / 0x10000LU;
-        uint32_t period = freq_div / (prescaler + 1);
-        uint32_t compare = 64 * usec_low / (prescaler + 1);
-
-        LL_TIM_SetPrescaler(TIM1, prescaler);
-        LL_TIM_SetAutoReload(TIM1, period - 1);
-        LL_TIM_SetCounter(TIM1, period - 1);
-        LL_TIM_OC_SetCompareCH1(TIM1, compare);
-
-        /* timer is ready to launch, now start the pulse reader */
-        pulse_reader_set_timebase(reader, PulseReaderUnitMicrosecond);
-        pulse_reader_start(reader);
-
-        /* and quickly enable and switch over the GPIO to the generated signal */
-        LL_TIM_EnableCounter(TIM1);
-        furi_hal_gpio_init_ex(
-            gpio_out, GpioModeAltFunctionPushPull, GpioPullNo, GpioSpeedVeryHigh, GpioAltFn1TIM1);
-
-        /* now it's time to parse the pulses received by the reader */
-        uint32_t timer_pulses = period_count;
-        uint32_t prev_cnt = 0;
-
-        while(timer_pulses > 0) {
-            /* whenever the counter gets reset, we went through a full period */
-            uint32_t cur_cnt = LL_TIM_GetCounter(TIM1);
-            if(cur_cnt < prev_cnt) {
-                timer_pulses--;
-            }
-            prev_cnt = cur_cnt;
-        }
-        /* quickly halt the counter to keep a static signal */
-        LL_TIM_DisableCounter(TIM1);
-
-        do {
-            /* as all edges were sampled asynchronously, the timeout can be zero */
-            uint32_t length = pulse_reader_receive(reader, 0);
-
-            /* in the last pulse, we expect a "no edge" return value. if seen that, test succeeded. */
-            if(pulses > period_count * 2) {
-                if(length != PULSE_READER_NO_EDGE) {
-                    FURI_LOG_E(
-                        TAG,
-                        "last pulse expected to be PULSE_READER_NO_EDGE, but was %lu.",
-                        length);
-                    break;
-                }
-                success = true;
-                break;
-            }
-
-            /* else we shall never see "no edge" or "lost edge" */
-            if(length == PULSE_READER_NO_EDGE) {
-                FURI_LOG_E(TAG, "%lu. pulse not expected to be PULSE_READER_NO_EDGE", pulses);
-                break;
-            }
-            if(length == PULSE_READER_LOST_EDGE) {
-                FURI_LOG_E(TAG, "%lu. pulse not expected to be PULSE_READER_LOST_EDGE", pulses);
-                break;
-            }
-
-            if(pulses > 0) {
-                /* throw away the first pulse, which is the 1->0 from the first start and will be irrelevant for our test */
-                bool phase = ((pulses - 1) % 2) == 1;
-                uint32_t expected = phase ? usec_high : usec_low;
-                uint32_t deviation = abs((int32_t)length - (int32_t)expected);
-
-                if(deviation > tolerance) {
-                    FURI_LOG_E(
-                        TAG,
-                        "%lu. pulse expected %lu, but pulse was %lu.",
-                        pulses,
-                        expected,
-                        length);
-                    break;
-                }
-            }
-            pulses++;
-        } while(true);
-    } while(false);
-
-    if(reader != NULL) {
-        pulse_reader_stop(reader);
-        pulse_reader_free(reader);
-    }
-
-    LL_TIM_DeInit(TIM1);
-    furi_hal_gpio_init_simple(gpio_in, GpioModeAnalog);
-    furi_hal_gpio_init_simple(gpio_out, GpioModeAnalog);
-
-    return success;
-}
-
-MU_TEST(nfc_pulse_reader_test) {
-    mu_assert(nfc_test_pulse_reader_toggle(1500, 2500, 50, 10), "1 ms signal failed\r\n");
-    mu_assert(nfc_test_pulse_reader_toggle(10000, 10000, 10, 10), "10 ms signal failed\r\n");
-    mu_assert(nfc_test_pulse_reader_toggle(100000, 100000, 5, 50), "100 ms signal failed\r\n");
-    mu_assert(nfc_test_pulse_reader_toggle(100, 900, 50, 10), "1 ms asymmetric signal failed\r\n");
-    mu_assert(
-        nfc_test_pulse_reader_toggle(3333, 6666, 10, 10), "10 ms asymmetric signal failed\r\n");
-    mu_assert(
-        nfc_test_pulse_reader_toggle(25000, 75000, 5, 10), "100 ms asymmetric signal failed\r\n");
 }
 
 MU_TEST(mf_classic_dict_test) {
@@ -662,7 +556,6 @@ MU_TEST(mf_classic_4k_7b_file_test) {
 MU_TEST_SUITE(nfc) {
     nfc_test_alloc();
 
-    MU_RUN_TEST(nfc_pulse_reader_test);
     MU_RUN_TEST(nfca_file_test);
     MU_RUN_TEST(mf_mini_file_test);
     MU_RUN_TEST(mf_classic_1k_4b_file_test);

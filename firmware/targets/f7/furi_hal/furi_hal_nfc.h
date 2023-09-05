@@ -70,24 +70,13 @@ typedef enum {
 } FuriHalNfcInterface;
 
 typedef struct {
-    uint32_t cuid;
-    uint8_t atqa[2];
-    uint8_t sak;
-} FuriHalNfcADevData;
-
-typedef struct {
-    uint8_t pmm[8];
-} FuriHalNfcFDevData;
-
-typedef struct {
     FuriHalNfcType type;
     FuriHalNfcInterface interface;
     uint8_t uid_len;
     uint8_t uid[10];
-    union {
-        FuriHalNfcADevData a_data;
-        FuriHalNfcFDevData f_data;
-    };
+    uint32_t cuid;
+    uint8_t atqa[2];
+    uint8_t sak;
 } FuriHalNfcDevData;
 
 typedef void (
@@ -413,7 +402,6 @@ void furi_hal_nfc_ll_txrx_on();
 
 void furi_hal_nfc_ll_txrx_off();
 
-// TODO rework all pollers with furi_hal_nfc_ll_txrx_bits
 FuriHalNfcReturn furi_hal_nfc_ll_txrx(
     uint8_t* txBuf,
     uint16_t txBufLen,
@@ -433,6 +421,10 @@ FuriHalNfcReturn furi_hal_nfc_ll_txrx_bits(
     uint32_t fwt);
 
 void furi_hal_nfc_ll_poll();
+
+void furi_hal_nfc_field_detect_start();
+
+bool furi_hal_nfc_field_is_present();
 
 #ifdef __cplusplus
 }

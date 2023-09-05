@@ -3,13 +3,13 @@
 
 #include <cli/cli.h>
 #include <lib/toolbox/args.h>
-#include <lib/toolbox/md5.h>
+#include <lib/toolbox/md5_calc.h>
 #include <lib/toolbox/dir_walk.h>
 #include <storage/storage.h>
 #include <storage/storage_sd_api.h>
 #include <power/power_service/power.h>
 
-#define MAX_NAME_LENGTH 255
+#define MAX_NAME_LENGTH 254
 
 static void storage_cli_print_usage() {
     printf("Usage:\r\n");
@@ -29,6 +29,8 @@ static void storage_cli_print_usage() {
         "\twrite_chunk\t - read data from cli and append it to file, <args> should contain how many bytes you want to write\r\n");
     printf("\tcopy\t - copy file to new file, <args> must contain new path\r\n");
     printf("\trename\t - move file to new file, <args> must contain new path\r\n");
+    printf(
+        "\tmigrate\t - move folder to new path, renaming already present files by adding numbers to the end\r\n");
     printf("\tmkdir\t - creates a new directory\r\n");
     printf("\tmd5\t - md5 hash of the file\r\n");
     printf("\tstat\t - info about file or dir\r\n");
@@ -466,6 +468,27 @@ static void storage_cli_rename(Cli* cli, FuriString* old_path, FuriString* args)
     furi_record_close(RECORD_STORAGE);
 }
 
+static void storage_cli_migrate(Cli* cli, FuriString* old_path, FuriString* args) {
+    UNUSED(cli);
+    Storage* api = furi_record_open(RECORD_STORAGE);
+    FuriString* new_path;
+    new_path = furi_string_alloc();
+
+    if(!args_read_probably_quoted_string_and_trim(args, new_path)) {
+        storage_cli_print_usage();
+    } else {
+        FS_Error error = storage_common_migrate(
+            api, furi_string_get_cstr(old_path), furi_string_get_cstr(new_path));
+
+        if(error != FSE_OK) {
+            storage_cli_print_error(error);
+        }
+    }
+
+    furi_string_free(new_path);
+    furi_record_close(RECORD_STORAGE);
+}
+
 static void storage_cli_mkdir(Cli* cli, FuriString* path) {
     UNUSED(cli);
     Storage* api = furi_record_open(RECORD_STORAGE);
@@ -482,34 +505,16 @@ static void storage_cli_md5(Cli* cli, FuriString* path) {
     UNUSED(cli);
     Storage* api = furi_record_open(RECORD_STORAGE);
     File* file = storage_file_alloc(api);
+    FuriString* md5 = furi_string_alloc();
+    FS_Error file_error;
 
-    if(storage_file_open(file, furi_string_get_cstr(path), FSAM_READ, FSOM_OPEN_EXISTING)) {
-        const uint16_t buffer_size = 512;
-        const uint8_t hash_size = 16;
-        uint8_t* data = malloc(buffer_size);
-        uint8_t* hash = malloc(sizeof(uint8_t) * hash_size);
-        md5_context* md5_ctx = malloc(sizeof(md5_context));
-
-        md5_starts(md5_ctx);
-        while(true) {
-            uint16_t read_size = storage_file_read(file, data, buffer_size);
-            if(read_size == 0) break;
-            md5_update(md5_ctx, data, read_size);
-        }
-        md5_finish(md5_ctx, hash);
-        free(md5_ctx);
-
-        for(uint8_t i = 0; i < hash_size; i++) {
-            printf("%02x", hash[i]);
-        }
-        printf("\r\n");
-
-        free(hash);
-        free(data);
+    if(md5_string_calc_file(file, furi_string_get_cstr(path), md5, &file_error)) {
+        printf("%s\r\n", furi_string_get_cstr(md5));
     } else {
-        storage_cli_print_error(storage_file_get_error(file));
+        storage_cli_print_error(file_error);
     }
 
+    furi_string_free(md5);
     storage_file_close(file);
     storage_file_free(file);
 
@@ -586,6 +591,11 @@ void storage_cli(Cli* cli, FuriString* args, void* context) {
 
         if(furi_string_cmp_str(cmd, "rename") == 0) {
             storage_cli_rename(cli, path, args);
+            break;
+        }
+
+        if(furi_string_cmp_str(cmd, "migrate") == 0) {
+            storage_cli_migrate(cli, path, args);
             break;
         }
 

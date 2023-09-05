@@ -19,14 +19,24 @@
 #include <gui/modules/submenu.h>
 #include <gui/modules/variable_item_list.h>
 #include <gui/modules/widget.h>
-#include "wifi_marauder_text_input.h"
+#include <gui/modules/text_input.h>
 
-#include <ESP32_WiFi_Marauder_icons.h>
+#include <esp32_wifi_marauder_icons.h>
+#include <assets_icons.h>
 #include <storage/storage.h>
 #include <lib/toolbox/path.h>
 #include <dialogs/dialogs.h>
+#include <xtreme.h>
 
-#define NUM_MENU_ITEMS (18)
+#define XTREME_UART_CH                                                          \
+    (XTREME_SETTINGS()->uart_esp_channel == UARTDefault ? FuriHalUartIdUSART1 : \
+                                                          FuriHalUartIdLPUART1)
+
+#define US_ART_CH (FuriHalUartIdUSART1)
+#define LP_UART_CH (FuriHalUartIdLPUART1)
+#define BAUDRATE (115200)
+
+#define NUM_MENU_ITEMS (20)
 
 #define WIFI_MARAUDER_TEXT_BOX_STORE_SIZE (4096)
 #define WIFI_MARAUDER_TEXT_INPUT_STORE_SIZE (512)
@@ -57,7 +67,7 @@ struct WifiMarauderApp {
     FuriString* text_box_store;
     size_t text_box_store_strlen;
     TextBox* text_box;
-    WIFI_TextInput* text_input;
+    TextInput* text_input;
     Storage* storage;
     File* capture_file;
     File* log_file;
@@ -78,7 +88,7 @@ struct WifiMarauderApp {
     int open_log_file_num_pages;
 
     WifiMarauderUart* uart;
-    WifiMarauderUart* lp_uart;
+    WifiMarauderUart* pcap_uart;
     int selected_menu_index;
     int selected_option_index[NUM_MENU_ITEMS];
     const char* selected_tx_string;

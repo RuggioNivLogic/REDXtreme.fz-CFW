@@ -11,7 +11,7 @@
 struct TotpAddContext {
     FuriString* args;
     Cli* cli;
-    uint8_t* iv;
+    const CryptoSettings* crypto_settings;
 };
 
 enum TotpIteratorUpdateTokenResultsEx {
@@ -54,7 +54,7 @@ static TotpIteratorUpdateTokenResult
 
     // Reading token secret
     furi_string_reset(temp_str);
-    TOTP_CLI_PRINTF("Enter token secret and confirm with [ENTER]\r\n");
+    TOTP_CLI_PRINTF("Enter token secret and confirm with [ENTER]:\r\n");
     if(!totp_cli_read_line(context_t->cli, temp_str, mask_user_input)) {
         totp_cli_delete_last_line();
         furi_string_secure_free(temp_str);
@@ -68,7 +68,7 @@ static TotpIteratorUpdateTokenResult
         furi_string_get_cstr(temp_str),
         furi_string_size(temp_str),
         token_secret_encoding,
-        context_t->iv);
+        context_t->crypto_settings);
 
     furi_string_secure_free(temp_str);
 
@@ -79,6 +79,7 @@ static TotpIteratorUpdateTokenResult
     return TotpIteratorUpdateTokenResultSuccess;
 }
 
+#ifdef TOTP_CLI_RICH_HELP_ENABLED
 void totp_cli_command_add_docopt_commands() {
     TOTP_CLI_PRINTF("  " TOTP_CLI_COMMAND_ADD ", " TOTP_CLI_COMMAND_ADD_ALT
                     ", " TOTP_CLI_COMMAND_ADD_ALT2 "     Add new token\r\n");
@@ -102,15 +103,22 @@ void totp_cli_command_add_docopt_options() {
     TOTP_CLI_PRINTF("  " DOCOPT_OPTION(
         TOTP_CLI_COMMAND_ARG_ALGO_PREFIX,
         DOCOPT_ARGUMENT(
-            TOTP_CLI_COMMAND_ARG_ALGO)) "      Token hashing algorithm. Must be one of: " TOTP_TOKEN_ALGO_SHA1_NAME
-                                        ", " TOTP_TOKEN_ALGO_SHA256_NAME
-                                        ", " TOTP_TOKEN_ALGO_SHA512_NAME
-                                        ", " TOTP_TOKEN_ALGO_STEAM_NAME
-                                        " " DOCOPT_DEFAULT(TOTP_TOKEN_ALGO_SHA1_NAME) "\r\n");
-    TOTP_CLI_PRINTF("  " DOCOPT_OPTION(
-        TOTP_CLI_COMMAND_ARG_DIGITS_PREFIX,
-        DOCOPT_ARGUMENT(
-            TOTP_CLI_COMMAND_ARG_DIGITS)) "    Number of digits to generate, one of: 5, 6, 8 " DOCOPT_DEFAULT("6") "\r\n");
+            TOTP_CLI_COMMAND_ARG_ALGO)) "      Token hashing algorithm. Must be one of: " TOKEN_HASH_ALGO_SHA1_NAME
+                                        ", " TOKEN_HASH_ALGO_SHA256_NAME
+                                        ", " TOKEN_HASH_ALGO_SHA512_NAME
+                                        ", " TOKEN_HASH_ALGO_STEAM_NAME
+                                        " " DOCOPT_DEFAULT(TOKEN_HASH_ALGO_SHA1_NAME) "\r\n");
+    TOTP_CLI_PRINTF(
+        "  " DOCOPT_OPTION(
+            TOTP_CLI_COMMAND_ARG_DIGITS_PREFIX,
+            DOCOPT_ARGUMENT(
+                TOTP_CLI_COMMAND_ARG_DIGITS)) "    Number of digits to generate, one of: %" PRIu8
+                                              ", %" PRIu8 ", %" PRIu8
+                                              " " DOCOPT_DEFAULT("%" PRIu8) "\r\n",
+        TokenDigitsCountFive,
+        TokenDigitsCountSix,
+        TokenDigitsCountEight,
+        TokenDigitsCountSix);
 
     TOTP_CLI_PRINTF("  " DOCOPT_OPTION(
         TOTP_CLI_COMMAND_ARG_SECRET_ENCODING_PREFIX,
@@ -120,29 +128,35 @@ void totp_cli_command_add_docopt_options() {
                                                    " " DOCOPT_DEFAULT(
                                                        PLAIN_TOKEN_ENCODING_BASE32_NAME) "\r\n");
 
-    TOTP_CLI_PRINTF("  " DOCOPT_OPTION(
-        TOTP_CLI_COMMAND_ARG_DURATION_PREFIX,
-        DOCOPT_ARGUMENT(
-            TOTP_CLI_COMMAND_ARG_DURATION)) "  Token lifetime duration in seconds, between: 15 and 255 " DOCOPT_DEFAULT("30") "\r\n");
+    TOTP_CLI_PRINTF(
+        "  " DOCOPT_OPTION(
+            TOTP_CLI_COMMAND_ARG_DURATION_PREFIX,
+            DOCOPT_ARGUMENT(
+                TOTP_CLI_COMMAND_ARG_DURATION)) "  Token lifetime duration in seconds, between: %" PRIu8
+                                                " and %" PRIu8
+                                                " " DOCOPT_DEFAULT("%" PRIu8) "\r\n",
+        TokenDurationMin,
+        TokenDurationMax,
+        TokenDurationDefault);
     TOTP_CLI_PRINTF("  " DOCOPT_SWITCH(
         TOTP_CLI_COMMAND_ARG_UNSECURE_PREFIX) "             Show console user input as-is without masking\r\n");
     TOTP_CLI_PRINTF("  " DOCOPT_OPTION(
         TOTP_CLI_COMMAND_ARG_AUTOMATION_FEATURE_PREFIX,
         DOCOPT_ARGUMENT(
-            TOTP_CLI_COMMAND_ARG_AUTOMATION_FEATURE)) "   Token automation features to be enabled. Must be one of: " TOTP_TOKEN_AUTOMATION_FEATURE_NONE_NAME
-                                                      ", " TOTP_TOKEN_AUTOMATION_FEATURE_ENTER_AT_THE_END_NAME
-                                                      ", " TOTP_TOKEN_AUTOMATION_FEATURE_TAB_AT_THE_END_NAME
+            TOTP_CLI_COMMAND_ARG_AUTOMATION_FEATURE)) "   Token automation features to be enabled. Must be one of: " TOKEN_AUTOMATION_FEATURE_NONE_NAME
+                                                      ", " TOKEN_AUTOMATION_FEATURE_ENTER_AT_THE_END_NAME
+                                                      ", " TOKEN_AUTOMATION_FEATURE_TAB_AT_THE_END_NAME
                                                       " " DOCOPT_DEFAULT(
-                                                          TOTP_TOKEN_AUTOMATION_FEATURE_NONE_NAME) "\r\n");
-    TOTP_CLI_PRINTF("                 # " TOTP_TOKEN_AUTOMATION_FEATURE_NONE_NAME
-                    " - No features\r\n");
-    TOTP_CLI_PRINTF("                 # " TOTP_TOKEN_AUTOMATION_FEATURE_ENTER_AT_THE_END_NAME
+                                                          TOKEN_AUTOMATION_FEATURE_NONE_NAME) "\r\n");
+    TOTP_CLI_PRINTF("                 # " TOKEN_AUTOMATION_FEATURE_NONE_NAME " - No features\r\n");
+    TOTP_CLI_PRINTF("                 # " TOKEN_AUTOMATION_FEATURE_ENTER_AT_THE_END_NAME
                     " - Type <Enter> key at the end of token input automation\r\n");
-    TOTP_CLI_PRINTF("                 # " TOTP_TOKEN_AUTOMATION_FEATURE_TAB_AT_THE_END_NAME
+    TOTP_CLI_PRINTF("                 # " TOKEN_AUTOMATION_FEATURE_TAB_AT_THE_END_NAME
                     " - Type <Tab> key at the end of token input automation\r\n");
-    TOTP_CLI_PRINTF("                 # " TOTP_TOKEN_AUTOMATION_FEATURE_TYPE_SLOWER_NAME
+    TOTP_CLI_PRINTF("                 # " TOKEN_AUTOMATION_FEATURE_TYPE_SLOWER_NAME
                     " - Type slower\r\n");
 }
+#endif
 
 void totp_cli_command_add_handle(PluginState* plugin_state, FuriString* args, Cli* cli) {
     if(!totp_cli_ensure_authenticated(plugin_state, cli)) {
@@ -154,7 +168,8 @@ void totp_cli_command_add_handle(PluginState* plugin_state, FuriString* args, Cl
 
     TOTP_CLI_LOCK_UI(plugin_state);
 
-    struct TotpAddContext add_context = {.args = args, .cli = cli, .iv = &plugin_state->iv[0]};
+    struct TotpAddContext add_context = {
+        .args = args, .cli = cli, .crypto_settings = &plugin_state->crypto_settings};
     TotpIteratorUpdateTokenResult add_result =
         totp_token_info_iterator_add_new_token(iterator_context, &add_token_handler, &add_context);
 

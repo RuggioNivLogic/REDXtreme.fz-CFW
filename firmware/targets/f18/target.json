@@ -25,9 +25,9 @@
         "appframe",
         "assets",
         "one_wire",
+        "music_worker",
         "misc",
         "flipper_application",
-        "pulse_reader",
         "flipperformat",
         "toolbox",
         "flipper18"

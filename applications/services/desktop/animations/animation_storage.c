@@ -13,17 +13,9 @@
 #include <assets_dolphin_blocking.h>
 #include <xtreme.h>
 #define ANIMATION_META_FILE "meta.txt"
-#define BASE_ANIMATION_DIR EXT_PATH("dolphin")
 #define TAG "AnimationStorage"
-/* Unused old code, for safe-keeping
-
-#define ANIMATION_MANIFEST_FILE ANIMATION_DIR "/manifest.txt"
-
-*/
-// 59 Max length = strlen("/ext/dolphin_custom//Anims") + XTREME_ASSETS_PACK_NAME_LEN + 1 (Null terminator)
-char ANIMATION_DIR[59];
-// 72 Max length = ANIMATION_DIR + strlen("/manifest.txt")
-char ANIMATION_MANIFEST_FILE[72];
+char ANIMATION_DIR[23 /*"/ext/asset_packs//Anims"*/ + XTREME_ASSETS_PACK_NAME_LEN + 1];
+char ANIMATION_MANIFEST_FILE[sizeof(ANIMATION_DIR) + 13 /*"/manifest.txt"*/];
 
 static void animation_storage_free_bubbles(BubbleAnimation* animation);
 static void animation_storage_free_frames(BubbleAnimation* animation);
@@ -43,6 +35,7 @@ void animation_handler_select_manifest() {
         if(storage_common_stat(storage, furi_string_get_cstr(manifest), NULL) == FSE_OK) {
             FURI_LOG_I(TAG, "Custom manifest selected");
         } else {
+            FURI_LOG_E(TAG, "Custom manifest does not exist!");
             use_asset_pack = false;
         }
         furi_record_close(RECORD_STORAGE);
@@ -521,7 +514,7 @@ static BubbleAnimation* animation_storage_load_animation(const char* name) {
         if(!flipper_format_read_uint32(ff, "Active cycles", &u32value, 1)) break; //-V779
         animation->active_cycles = u32value;
         if(!flipper_format_read_uint32(ff, "Frame rate", &u32value, 1)) break;
-        uint16_t anim_speed = XTREME_SETTINGS()->anim_speed;
+        uint32_t anim_speed = XTREME_SETTINGS()->anim_speed;
         u32value = (u32value * anim_speed) / 100;
         FURI_CONST_ASSIGN(animation->icon_animation.frame_rate, u32value < 1 ? 1 : u32value);
         if(!flipper_format_read_uint32(ff, "Duration", &u32value, 1)) break;

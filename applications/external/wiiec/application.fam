@@ -3,7 +3,7 @@
 App(
     # --- App Info
     appid="wii_ec_anal",
-    name="[GPIO] Wii EC Analyser",
+    name="[WII] EC Analyser",
     # --- Entry point
     apptype=FlipperAppType.EXTERNAL,
     entry_point="wii_ec_anal",
@@ -16,7 +16,6 @@ App(
     # 	sdk_headers="",
     # --- Run-time info
     stack_size=2 * 1024,
-    order=20,
     # --- FAP details
     sources=["wii_*.c", "gfx/*.c"],
     # 	fap_weburl="https://github.com/csBlueChip/FlipperZero_plugin_WiiChuck/",
@@ -25,4 +24,8 @@ App(
     # 	fap_version=(1,0),
     fap_icon="WiiEC.png",
     fap_category="GPIO",
+    fap_author="@csBlueChip",
+    fap_weburl="https://github.com/csBlueChip/FlipperZero_WiiEC",
+    fap_version="1.0",
+    fap_description="Application to test Wii Extension Controllers.",
 )

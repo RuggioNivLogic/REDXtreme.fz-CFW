@@ -7,7 +7,7 @@
 #include "../blocks/generic.h"
 #include "../blocks/math.h"
 
-#include "../blocks/custom_btn.h"
+#include "../blocks/custom_btn_i.h"
 
 #define TAG "SubGhzProtocoCameAtomo"
 
@@ -186,7 +186,7 @@ static void subghz_protocol_encoder_came_atomo_get_upload(
     uint8_t pack[8] = {};
 
     if(instance->generic.cnt < 0xFFFF) {
-        if((instance->generic.cnt + furi_hal_subghz_get_rolling_counter_mult()) >= 0xFFFF) {
+        if((instance->generic.cnt + furi_hal_subghz_get_rolling_counter_mult()) > 0xFFFF) {
             instance->generic.cnt = 0;
         } else {
             instance->generic.cnt += furi_hal_subghz_get_rolling_counter_mult();

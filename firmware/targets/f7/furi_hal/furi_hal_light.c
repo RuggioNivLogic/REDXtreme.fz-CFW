@@ -45,7 +45,7 @@ void furi_hal_light_set(Light light, uint8_t value) {
     }
     if(light & LightBacklight) {
         if(XTREME_SETTINGS()->rgb_backlight) {
-            rgb_backlight_update(value);
+            rgb_backlight_update(value, false);
         } else {
             uint8_t prev =
                 lp5562_get_channel_value(&furi_hal_i2c_handle_power, LP5562ChannelWhite);
@@ -97,26 +97,39 @@ void furi_hal_light_blink_set_color(Light light) {
 
 void furi_hal_light_sequence(const char* sequence) {
     do {
-        if(*sequence == 'R') {
+        switch(*sequence) {
+        case 'R':
             furi_hal_light_set(LightRed, 0xFF);
-        } else if(*sequence == 'r') {
+            break;
+        case 'r':
             furi_hal_light_set(LightRed, 0x00);
-        } else if(*sequence == 'G') {
+            break;
+        case 'G':
             furi_hal_light_set(LightGreen, 0xFF);
-        } else if(*sequence == 'g') {
+            break;
+        case 'g':
             furi_hal_light_set(LightGreen, 0x00);
-        } else if(*sequence == 'B') {
+            break;
+        case 'B':
             furi_hal_light_set(LightBlue, 0xFF);
-        } else if(*sequence == 'b') {
+            break;
+        case 'b':
             furi_hal_light_set(LightBlue, 0x00);
-        } else if(*sequence == 'W') {
+            break;
+        case 'W':
             furi_hal_light_set(LightBacklight, 0xFF);
-        } else if(*sequence == 'w') {
+            break;
+        case 'w':
             furi_hal_light_set(LightBacklight, 0x00);
-        } else if(*sequence == '.') {
+            break;
+        case '.':
             furi_delay_ms(250);
-        } else if(*sequence == '-') {
+            break;
+        case '-':
             furi_delay_ms(500);
+            break;
+        default:
+            break;
         }
         sequence++;
     } while(*sequence != 0);

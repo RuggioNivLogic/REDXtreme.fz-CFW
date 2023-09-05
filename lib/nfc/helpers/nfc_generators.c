@@ -83,9 +83,9 @@ static void nfc_generate_mf_ul_common(NfcDeviceData* data) {
     data->nfc_data.interface = FuriHalNfcInterfaceRf;
     data->nfc_data.uid_len = 7;
     nfc_generate_mf_ul_uid(data->nfc_data.uid);
-    data->nfc_data.a_data.atqa[0] = 0x44;
-    data->nfc_data.a_data.atqa[1] = 0x00;
-    data->nfc_data.a_data.sak = 0x00;
+    data->nfc_data.atqa[0] = 0x44;
+    data->nfc_data.atqa[1] = 0x00;
+    data->nfc_data.sak = 0x00;
     data->protocol = NfcDeviceProtocolMifareUl;
 }
 
@@ -94,15 +94,9 @@ static void
     data->nfc_data.type = FuriHalNfcTypeA;
     data->nfc_data.interface = FuriHalNfcInterfaceRf;
     data->nfc_data.uid_len = uid_len;
-    data->nfc_data.a_data.atqa[0] = 0x44;
-    data->nfc_data.a_data.atqa[1] = 0x00;
-    data->nfc_data.a_data.sak = 0x08;
-    nfc_generate_mf_classic_block_0(
-        data->mf_classic_data.block[0].value,
-        uid_len,
-        data->nfc_data.a_data.sak,
-        data->nfc_data.a_data.atqa[0],
-        data->nfc_data.a_data.atqa[1]);
+    data->nfc_data.atqa[0] = 0x44;
+    data->nfc_data.atqa[1] = 0x00;
+    data->nfc_data.sak = 0x08;
     data->protocol = NfcDeviceProtocolMifareClassic;
     data->mf_classic_data.type = type;
 }
@@ -256,9 +250,9 @@ static void
     mful->data_size = num_pages * 4;
     mful->data_read = mful->data_size;
     memcpy(mful->data, data->nfc_data.uid, data->nfc_data.uid_len);
-    mful->data[7] = data->nfc_data.a_data.sak;
-    mful->data[8] = data->nfc_data.a_data.atqa[0];
-    mful->data[9] = data->nfc_data.a_data.atqa[1];
+    mful->data[7] = data->nfc_data.sak;
+    mful->data[8] = data->nfc_data.atqa[0];
+    mful->data[9] = data->nfc_data.atqa[1];
 
     uint16_t config_register_page;
     uint16_t session_register_page;
@@ -339,15 +333,30 @@ static void nfc_generate_ntag_i2c_plus_2k(NfcDeviceData* data) {
     mful->version.storage_size = 0x15;
 }
 
-void nfc_generate_mf_classic(NfcDeviceData* data, uint8_t uid_len, MfClassicType type) {
+void nfc_generate_mf_classic_ext(
+    NfcDeviceData* data,
+    uint8_t uid_len,
+    MfClassicType type,
+    bool random_uid,
+    uint8_t* uid) {
     nfc_generate_common_start(data);
-    nfc_generate_mf_classic_uid(data->mf_classic_data.block[0].value, uid_len);
+    if(random_uid) {
+        nfc_generate_mf_classic_uid(data->mf_classic_data.block[0].value, uid_len);
+    } else {
+        memcpy(data->mf_classic_data.block[0].value, uid, uid_len);
+    }
     nfc_generate_mf_classic_common(data, uid_len, type);
 
     // Set the UID
-    data->nfc_data.uid[0] = NXP_MANUFACTURER_ID;
-    for(int i = 1; i < uid_len; i++) {
-        data->nfc_data.uid[i] = data->mf_classic_data.block[0].value[i];
+    if(random_uid) {
+        data->nfc_data.uid[0] = NXP_MANUFACTURER_ID;
+        for(int i = 1; i < uid_len; i++) {
+            data->nfc_data.uid[i] = data->mf_classic_data.block[0].value[i];
+        }
+    } else {
+        for(int i = 0; i < uid_len; i++) {
+            data->nfc_data.uid[i] = data->mf_classic_data.block[0].value[i];
+        }
     }
 
     MfClassicData* mfc = &data->mf_classic_data;
@@ -364,7 +373,7 @@ void nfc_generate_mf_classic(NfcDeviceData* data, uint8_t uid_len, MfClassicType
             mf_classic_set_block_read(mfc, i, &mfc->block[i]);
         }
         // Set SAK to 18
-        data->nfc_data.a_data.sak = 0x18;
+        data->nfc_data.sak = 0x18;
     } else if(type == MfClassicType1k) {
         // Set every block to 0xFF
         for(uint16_t i = 1; i < MF_CLASSIC_1K_TOTAL_SECTORS_NUM * 4; i += 1) {
@@ -376,7 +385,7 @@ void nfc_generate_mf_classic(NfcDeviceData* data, uint8_t uid_len, MfClassicType
             mf_classic_set_block_read(mfc, i, &mfc->block[i]);
         }
         // Set SAK to 08
-        data->nfc_data.a_data.sak = 0x08;
+        data->nfc_data.sak = 0x08;
     } else if(type == MfClassicTypeMini) {
         // Set every block to 0xFF
         for(uint16_t i = 1; i < MF_MINI_TOTAL_SECTORS_NUM * 4; i += 1) {
@@ -388,17 +397,22 @@ void nfc_generate_mf_classic(NfcDeviceData* data, uint8_t uid_len, MfClassicType
             mf_classic_set_block_read(mfc, i, &mfc->block[i]);
         }
         // Set SAK to 09
-        data->nfc_data.a_data.sak = 0x09;
+        data->nfc_data.sak = 0x09;
     }
 
     nfc_generate_mf_classic_block_0(
         data->mf_classic_data.block[0].value,
         uid_len,
-        data->nfc_data.a_data.sak,
-        data->nfc_data.a_data.atqa[0],
-        data->nfc_data.a_data.atqa[1]);
+        data->nfc_data.sak,
+        data->nfc_data.atqa[0],
+        data->nfc_data.atqa[1]);
 
     mfc->type = type;
+}
+
+void nfc_generate_mf_classic(NfcDeviceData* data, uint8_t uid_len, MfClassicType type) {
+    uint8_t uid = 0;
+    nfc_generate_mf_classic_ext(data, uid_len, type, true, &uid);
 }
 
 static void nfc_generate_mf_mini(NfcDeviceData* data) {

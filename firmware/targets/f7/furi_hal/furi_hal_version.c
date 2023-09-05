@@ -106,15 +106,15 @@ void furi_hal_version_set_name(const char* name) {
 
     // BLE Mac address
     uint32_t udn = LL_FLASH_GetUDN();
-    if(name != NULL) {
-        udn = *((uint32_t*)name);
+    if(version_get_custom_name(NULL) != NULL) {
+        udn = *((uint32_t*)version_get_custom_name(NULL));
     }
 
     uint32_t company_id = LL_FLASH_GetSTCompanyID();
     // uint32_t device_id = LL_FLASH_GetDeviceID();
-    // Somehow some new flippers return 0x27 instead of 0x26
-    // Mobile apps expects it to return 0x26 (and clearly STM too)
-    // Temporarely hardcoded until cause / fix is found
+    // Some flippers return 0x27 (flippers with chip revision 2003 6495) instead of 0x26 (flippers with chip revision 2001 6495)
+    // Mobile apps expects it to return 0x26
+    // Hardcoded here temporarily until mobile apps is updated to handle 0x27
     uint32_t device_id = 0x26;
     furi_hal_version.ble_mac[0] = (uint8_t)(udn & 0x000000FF);
     furi_hal_version.ble_mac[1] = (uint8_t)((udn & 0x0000FF00) >> 8);
@@ -316,6 +316,10 @@ const struct Version* furi_hal_version_get_firmware_version(void) {
 
 size_t furi_hal_version_uid_size() {
     return 64 / 8;
+}
+
+const uint8_t* furi_hal_version_uid_default() {
+    return (const uint8_t*)UID64_BASE;
 }
 
 const uint8_t* furi_hal_version_uid() {
