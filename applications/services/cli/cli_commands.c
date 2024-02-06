@@ -221,7 +221,12 @@ void cli_command_log(Cli* cli, FuriString* args, void* context) {
     furi_log_level_to_string(furi_log_get_level(), &current_level);
     printf("Current log level: %s\r\n", current_level);
 
-    furi_hal_console_set_tx_callback(cli_command_log_tx_callback, ring);
+    FuriLogHandler log_handler = {
+        .callback = cli_command_log_tx_callback,
+        .context = ring,
+    };
+
+    furi_log_add_handler(log_handler);
 
     printf("Use <log ?> to list available log levels\r\n");
     printf("Press CTRL+C to stop...\r\n");
@@ -230,7 +235,7 @@ void cli_command_log(Cli* cli, FuriString* args, void* context) {
         cli_write(cli, buffer, ret);
     }
 
-    furi_hal_console_set_tx_callback(NULL, NULL);
+    furi_log_remove_handler(log_handler);
 
     if(restore_log_level) {
         // There will be strange behaviour if log level is set from settings while log command is running
@@ -474,6 +479,7 @@ void cli_commands_init(Cli* cli) {
     cli_add_command(cli, "uptime", CliCommandFlagDefault, cli_command_uptime, NULL);
     cli_add_command(cli, "date", CliCommandFlagParallelSafe, cli_command_date, NULL);
     cli_add_command(cli, "log", CliCommandFlagParallelSafe, cli_command_log, NULL);
+    cli_add_command(cli, "l", CliCommandFlagParallelSafe, cli_command_log, NULL);
     cli_add_command(cli, "sysctl", CliCommandFlagDefault, cli_command_sysctl, NULL);
     cli_add_command(cli, "ps", CliCommandFlagParallelSafe, cli_command_ps, NULL);
     cli_add_command(cli, "free", CliCommandFlagParallelSafe, cli_command_free, NULL);

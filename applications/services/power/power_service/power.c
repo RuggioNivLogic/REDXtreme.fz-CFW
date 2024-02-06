@@ -2,7 +2,7 @@
 
 #include <furi.h>
 #include <furi_hal.h>
-#include <xtreme.h>
+#include <xtreme/xtreme.h>
 
 #define POWER_OFF_TIMEOUT 90
 #define TAG "Power"
@@ -16,7 +16,7 @@ void power_set_battery_icon_enabled(Power* power, bool is_enabled) {
 void power_draw_battery_callback(Canvas* canvas, void* context) {
     furi_assert(context);
     Power* power = context;
-    BatteryIcon battery_icon = XTREME_SETTINGS()->battery_icon;
+    BatteryIcon battery_icon = xtreme_settings.battery_icon;
     if(battery_icon == BatteryIconOff) return;
 
     canvas_draw_icon(canvas, 0, 0, &I_Battery_25x8);
@@ -261,21 +261,23 @@ static uint32_t power_is_running_auto_shutdown_timer(Power* power) {
     return furi_timer_is_running(power->auto_shutdown_timer);
 }
 
-static void power_input_event_callback(const void* value, void* context) {
+static void power_auto_shutdown_callback(const void* value, void* context) {
     furi_assert(value);
     furi_assert(context);
-    const InputEvent* event = value;
+    UNUSED(value);
     Power* power = context;
-    if(event->type == InputTypePress) {
-        power_start_auto_shutdown_timer(power);
-    }
+    power_start_auto_shutdown_timer(power);
 }
 
 static void power_auto_shutdown_arm(Power* power) {
     if(power->shutdown_idle_delay_ms) {
         if(power->input_events_subscription == NULL) {
             power->input_events_subscription = furi_pubsub_subscribe(
-                power->input_events_pubsub, power_input_event_callback, power);
+                power->input_events_pubsub, power_auto_shutdown_callback, power);
+        }
+        if(power->ascii_events_subscription == NULL) {
+            power->ascii_events_subscription = furi_pubsub_subscribe(
+                power->ascii_events_pubsub, power_auto_shutdown_callback, power);
         }
         power_start_auto_shutdown_timer(power);
     }
@@ -286,6 +288,10 @@ static void power_auto_shutdown_inhibit(Power* power) {
     if(power->input_events_subscription) {
         furi_pubsub_unsubscribe(power->input_events_pubsub, power->input_events_subscription);
         power->input_events_subscription = NULL;
+    }
+    if(power->ascii_events_subscription) {
+        furi_pubsub_unsubscribe(power->ascii_events_pubsub, power->ascii_events_subscription);
+        power->ascii_events_subscription = NULL;
     }
 }
 
@@ -333,6 +339,8 @@ Power* power_alloc() {
     power->loader = furi_record_open(RECORD_LOADER);
     power->input_events_pubsub = furi_record_open(RECORD_INPUT_EVENTS);
     power->input_events_subscription = NULL;
+    power->ascii_events_pubsub = furi_record_open(RECORD_ASCII_EVENTS);
+    power->ascii_events_subscription = NULL;
     power->app_start_stop_subscription =
         furi_pubsub_subscribe(loader_get_pubsub(power->loader), power_loader_callback, power);
     power->settings_events_subscription =
@@ -359,7 +367,7 @@ Power* power_alloc() {
 
     // Battery view port
     power->battery_view_port = power_battery_view_port_alloc(power);
-    power_set_battery_icon_enabled(power, XTREME_SETTINGS()->battery_icon != BatteryIconOff);
+    power_set_battery_icon_enabled(power, xtreme_settings.battery_icon != BatteryIconOff);
     power->show_low_bat_level_message = true;
 
     //Auto shutdown timer
@@ -478,7 +486,7 @@ static void power_check_battery_level_change(Power* power) {
 }
 
 static void power_check_charge_cap(Power* power) {
-    uint32_t cap = XTREME_SETTINGS()->charge_cap;
+    uint32_t cap = xtreme_settings.charge_cap;
     if(power->info.charge >= cap && cap < 100) {
         if(!power->info.is_charge_capped) { // Suppress charging if charge reaches custom cap
             power->info.is_charge_capped = true;

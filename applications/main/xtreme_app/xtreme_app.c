@@ -131,6 +131,7 @@ bool xtreme_app_apply(XtremeApp* app) {
         view_dispatcher_switch_to_view(app->view_dispatcher, XtremeAppViewPopup);
         return true;
     } else if(app->apply_pack) {
+        XTREME_ASSETS_FREE();
         popup_set_header(app->popup, "Reloading...", 64, 26, AlignCenter, AlignCenter);
         popup_set_text(app->popup, "Applying asset pack...", 64, 40, AlignCenter, AlignCenter);
         popup_set_callback(app->popup, NULL);
@@ -138,7 +139,6 @@ bool xtreme_app_apply(XtremeApp* app) {
         popup_set_timeout(app->popup, 0);
         popup_disable_timeout(app->popup);
         view_dispatcher_switch_to_view(app->view_dispatcher, XtremeAppViewPopup);
-        XTREME_ASSETS_FREE();
         XTREME_ASSETS_LOAD();
     }
 
@@ -206,8 +206,6 @@ XtremeApp* xtreme_app_alloc() {
 
     // Settings init
 
-    XtremeSettings* xtreme_settings = XTREME_SETTINGS();
-
     app->asset_pack_index = 0;
     CharList_init(app->asset_pack_names);
     Storage* storage = furi_record_open(RECORD_STORAGE);
@@ -229,7 +227,7 @@ XtremeApp* xtreme_app_alloc() {
                 if(app->asset_pack_index != 0) {
                     if(idx < app->asset_pack_index) app->asset_pack_index++;
                 } else {
-                    if(strcmp(copy, xtreme_settings->asset_pack) == 0)
+                    if(strcmp(copy, xtreme_settings.asset_pack) == 0)
                         app->asset_pack_index = idx + 1;
                 }
             }

@@ -1,9 +1,11 @@
 #include "../subghz_i.h"
 #include "../views/transmitter.h"
 #include <dolphin/dolphin.h>
-#include <xtreme.h>
+#include <xtreme/xtreme.h>
 
 #include <lib/subghz/blocks/custom_btn.h>
+
+#define TAG "SubGhzSceneTransmitter"
 
 void subghz_scene_transmitter_callback(SubGhzCustomEvent event, void* context) {
     furi_assert(context);
@@ -68,19 +70,12 @@ void subghz_scene_transmitter_on_enter(void* context) {
 
     // Auto send and exit with favorites
     if(subghz->fav_timeout) {
-        // subghz_custom_btn_set(0);
+        furi_check(!subghz->timer, "SubGhz fav timer exists");
+        subghz->timer = furi_timer_alloc(fav_timer_callback, FuriTimerTypeOnce, subghz);
         scene_manager_handle_custom_event(
             subghz->scene_manager, SubGhzCustomEventViewTransmitterSendStart);
-        // with_view_model(
-        //     subghz->subghz_transmitter->view,
-        //     SubGhzViewTransmitterModel * model,
-        //     { model->show_button = false; },
-        //     true);
-        subghz->fav_timer = furi_timer_alloc(fav_timer_callback, FuriTimerTypeOnce, subghz);
         furi_timer_start(
-            subghz->fav_timer,
-            XTREME_SETTINGS()->favorite_timeout * furi_kernel_get_tick_frequency());
-        // subghz->state_notifications = SubGhzNotificationStateTx;
+            subghz->timer, xtreme_settings.favorite_timeout * furi_kernel_get_tick_frequency());
     }
 }
 
@@ -101,9 +96,13 @@ bool subghz_scene_transmitter_on_event(void* context, SceneManagerEvent event) {
             subghz_txrx_stop(subghz->txrx);
             if(subghz_custom_btn_get() != SUBGHZ_CUSTOM_BTN_OK) {
                 subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_OK);
-                uint8_t tmp_counter = furi_hal_subghz_get_rolling_counter_mult();
+                int8_t tmp_counter = furi_hal_subghz_get_rolling_counter_mult();
                 furi_hal_subghz_set_rolling_counter_mult(0);
                 // Calling restore!
+                subghz_tx_start(subghz, subghz_txrx_get_fff_data(subghz->txrx));
+                subghz_txrx_stop(subghz->txrx);
+                // Calling restore 2nd time special for FAAC SLH!
+                // TODO: Find better way to restore after custom button is used!!!
                 subghz_tx_start(subghz, subghz_txrx_get_fff_data(subghz->txrx));
                 subghz_txrx_stop(subghz->txrx);
                 furi_hal_subghz_set_rolling_counter_mult(tmp_counter);

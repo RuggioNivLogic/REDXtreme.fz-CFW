@@ -1,4 +1,4 @@
-#include "text_input_i.h"
+#include "text_input.h"
 #include <gui/elements.h>
 #include <assets_icons.h>
 #include <furi.h>
@@ -189,7 +189,7 @@ static uint8_t get_row_size(const Keyboard* keyboard, uint8_t row_index) {
             row_size = COUNT_OF(symbol_keyboard_keys_row_3);
             break;
         default:
-            furi_crash(NULL);
+            furi_crash();
         }
     } else {
         switch(row_index + 1) {
@@ -203,7 +203,7 @@ static uint8_t get_row_size(const Keyboard* keyboard, uint8_t row_index) {
             row_size = COUNT_OF(keyboard_keys_row_3);
             break;
         default:
-            furi_crash(NULL);
+            furi_crash();
         }
     }
 
@@ -215,7 +215,7 @@ static const TextInputKey* get_row(const Keyboard* keyboard, uint8_t row_index) 
     if(row_index < 3) {
         row = keyboard->rows[row_index];
     } else {
-        furi_crash(NULL);
+        furi_crash();
     }
 
     return row;
@@ -420,6 +420,7 @@ static void text_input_handle_down(TextInput* text_input, TextInputModel* model)
 static void text_input_handle_left(TextInput* text_input, TextInputModel* model) {
     UNUSED(text_input);
     if(model->cursor_select) {
+        model->clear_default_text = false;
         if(model->cursor_pos > 0) {
             model->cursor_pos = CLAMP(model->cursor_pos - 1, strlen(model->text_buffer), 0u);
         }
@@ -434,6 +435,7 @@ static void text_input_handle_left(TextInput* text_input, TextInputModel* model)
 static void text_input_handle_right(TextInput* text_input, TextInputModel* model) {
     UNUSED(text_input);
     if(model->cursor_select) {
+        model->clear_default_text = false;
         model->cursor_pos = CLAMP(model->cursor_pos + 1, strlen(model->text_buffer), 0u);
     } else if(
         model->selected_column <
@@ -445,7 +447,10 @@ static void text_input_handle_right(TextInput* text_input, TextInputModel* model
 }
 
 static void text_input_handle_ok(TextInput* text_input, TextInputModel* model, InputType type) {
-    if(model->cursor_select) return;
+    if(model->cursor_select) {
+        model->clear_default_text = !model->clear_default_text;
+        return;
+    }
     bool shift = type == InputTypeLong;
     bool repeat = type == InputTypeRepeat;
     char selected = get_selected_char(model);
@@ -490,7 +495,7 @@ static void text_input_handle_ok(TextInput* text_input, TextInputModel* model, I
     }
 }
 
-bool text_input_view_input_callback(InputEvent* event, void* context) {
+static bool text_input_view_input_callback(InputEvent* event, void* context) {
     TextInput* text_input = context;
     furi_assert(text_input);
 
@@ -583,6 +588,75 @@ bool text_input_view_input_callback(InputEvent* event, void* context) {
     return consumed;
 }
 
+static bool text_input_view_ascii_callback(AsciiEvent* event, void* context) {
+    TextInput* text_input = context;
+    furi_assert(text_input);
+
+    switch(event->value) {
+    case AsciiValueDC3: // Right
+    case AsciiValueDC4: // Left
+        with_view_model(
+            text_input->view,
+            TextInputModel * model,
+            {
+                model->cursor_select = true;
+                model->clear_default_text = false;
+                model->selected_row = 0;
+                if(event->value == AsciiValueDC3) {
+                    model->cursor_pos =
+                        CLAMP(model->cursor_pos + 1, strlen(model->text_buffer), 0u);
+                } else {
+                    if(model->cursor_pos > 0) {
+                        model->cursor_pos =
+                            CLAMP(model->cursor_pos - 1, strlen(model->text_buffer), 0u);
+                    }
+                }
+            },
+            true);
+        return true;
+    case _AsciiValueSOH: // Ctrl A
+        with_view_model(
+            text_input->view,
+            TextInputModel * model,
+            { model->clear_default_text = !model->clear_default_text; },
+            true);
+        return true;
+    default: // Look in keyboards
+        for(size_t k = 0; k < keyboard_count; k++) {
+            const Keyboard* keyboard = keyboards[k];
+            for(size_t r = 0; r < keyboard_row_count; r++) {
+                const TextInputKey* row = get_row(keyboard, r);
+                uint8_t size = get_row_size(keyboard, r);
+                for(size_t key = 0; key < size; key++) {
+                    char lower = row[key].text;
+                    char upper = char_to_uppercase(lower);
+                    if(event->value == lower || event->value == upper) {
+                        with_view_model(
+                            text_input->view,
+                            TextInputModel * model,
+                            {
+                                model->cursor_select = false;
+                                model->selected_keyboard = k;
+                                model->selected_row = r;
+                                model->selected_column = key;
+                                bool shift =
+                                    (event->value == upper) !=
+                                    (model->clear_default_text || strlen(model->text_buffer) == 0);
+                                text_input_handle_ok(
+                                    text_input, model, shift ? InputTypeLong : InputTypeShort);
+                            },
+                            true);
+                        return true;
+                    }
+                }
+            }
+        }
+        break;
+    }
+
+    return false;
+}
+
 void text_input_timer_callback(void* context) {
     furi_assert(context);
     TextInput* text_input = context;
@@ -628,6 +702,7 @@ TextInput* text_input_alloc() {
     view_allocate_model(text_input->view, ViewModelTypeLocking, sizeof(TextInputModel));
     view_set_draw_callback(text_input->view, text_input_view_draw_callback);
     view_set_input_callback(text_input->view, text_input_view_input_callback);
+    view_set_ascii_callback(text_input->view, text_input_view_ascii_callback);
 
     text_input->timer = furi_timer_alloc(text_input_timer_callback, FuriTimerTypeOnce, text_input);
 
@@ -810,53 +885,4 @@ void* text_input_get_validator_callback_context(TextInput* text_input) {
 void text_input_set_header_text(TextInput* text_input, const char* text) {
     with_view_model(
         text_input->view, TextInputModel * model, { model->header = text; }, true);
-}
-
-bool text_input_insert_character(TextInput* text_input, char chr) {
-    if(chr == 0x1b) { // Arrow escape code = Select input row
-        with_view_model(
-            text_input->view,
-            TextInputModel * model,
-            {
-                model->cursor_select = true;
-                model->clear_default_text = false;
-                model->selected_row = 0;
-            },
-            true);
-        return false; // Don't consume so CLI gives arrow input
-    }
-    if(chr == 0x01) { // Ctrl A = Select all text
-        with_view_model(
-            text_input->view, TextInputModel * model, { model->clear_default_text = true; }, true);
-        return true;
-    }
-    for(size_t k = 0; k < keyboard_count; k++) {
-        const Keyboard* keyboard = keyboards[k];
-        for(size_t r = 0; r < keyboard_row_count; r++) {
-            const TextInputKey* row = get_row(keyboard, r);
-            uint8_t size = get_row_size(keyboard, r);
-            for(size_t key = 0; key < size; key++) {
-                char lower = row[key].text;
-                char upper = char_to_uppercase(lower);
-                if(chr == lower || chr == upper) {
-                    with_view_model(
-                        text_input->view,
-                        TextInputModel * model,
-                        {
-                            model->cursor_select = false;
-                            model->selected_keyboard = k;
-                            model->selected_row = r;
-                            model->selected_column = key;
-                            bool shift = (chr == upper) != (model->clear_default_text ||
-                                                            strlen(model->text_buffer) == 0);
-                            text_input_handle_ok(
-                                text_input, model, shift ? InputTypeLong : InputTypeShort);
-                        },
-                        true);
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
 }

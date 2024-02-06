@@ -11,7 +11,7 @@
 #include <cli/cli_vcp.h>
 #include <locale/locale.h>
 #include <applications/main/archive/helpers/archive_helpers_ext.h>
-#include <xtreme.h>
+#include <xtreme/xtreme.h>
 
 #include "animations/animation_manager.h"
 #include "desktop/scenes/desktop_scene.h"
@@ -66,13 +66,13 @@ static void desktop_clock_reconfigure(Desktop* desktop) {
 
     desktop_clock_update(desktop);
 
-    if(XTREME_SETTINGS()->statusbar_clock) {
+    if(xtreme_settings.statusbar_clock) {
         furi_timer_start(desktop->update_clock_timer, furi_ms_to_ticks(1000));
     } else {
         furi_timer_stop(desktop->update_clock_timer);
     }
 
-    view_port_enabled_set(desktop->clock_viewport, XTREME_SETTINGS()->statusbar_clock);
+    view_port_enabled_set(desktop->clock_viewport, xtreme_settings.statusbar_clock);
 }
 
 static void desktop_clock_draw_callback(Canvas* canvas, void* context) {
@@ -96,7 +96,6 @@ static void desktop_clock_draw_callback(Canvas* canvas, void* context) {
     char buffer[20];
     snprintf(buffer, sizeof(buffer), "%02u:%02u", hour, desktop->time_minute);
 
-    // TODO FL-3515: never do that, may cause visual glitches
     view_port_set_width(
         desktop->clock_viewport,
         canvas_string_width(canvas, buffer) - 1 + (desktop->time_minute % 10 == 1));
@@ -146,14 +145,12 @@ static void desktop_tick_event_callback(void* context) {
     scene_manager_handle_tick_event(app->scene_manager);
 }
 
-static void desktop_input_event_callback(const void* value, void* context) {
+static void desktop_auto_lock_callback(const void* value, void* context) {
     furi_assert(value);
     furi_assert(context);
-    const InputEvent* event = value;
+    UNUSED(value);
     Desktop* desktop = context;
-    if(event->type == InputTypePress) {
-        desktop_start_auto_lock_timer(desktop);
-    }
+    desktop_start_auto_lock_timer(desktop);
 }
 
 static void desktop_auto_lock_timer_callback(void* context) {
@@ -173,8 +170,14 @@ static void desktop_stop_auto_lock_timer(Desktop* desktop) {
 
 static void desktop_auto_lock_arm(Desktop* desktop) {
     if(desktop->settings.auto_lock_delay_ms) {
-        desktop->input_events_subscription = furi_pubsub_subscribe(
-            desktop->input_events_pubsub, desktop_input_event_callback, desktop);
+        if(desktop->input_events_subscription == NULL) {
+            desktop->input_events_subscription = furi_pubsub_subscribe(
+                desktop->input_events_pubsub, desktop_auto_lock_callback, desktop);
+        }
+        if(desktop->ascii_events_subscription == NULL) {
+            desktop->ascii_events_subscription = furi_pubsub_subscribe(
+                desktop->ascii_events_pubsub, desktop_auto_lock_callback, desktop);
+        }
         desktop_start_auto_lock_timer(desktop);
     }
 }
@@ -184,6 +187,10 @@ static void desktop_auto_lock_inhibit(Desktop* desktop) {
     if(desktop->input_events_subscription) {
         furi_pubsub_unsubscribe(desktop->input_events_pubsub, desktop->input_events_subscription);
         desktop->input_events_subscription = NULL;
+    }
+    if(desktop->ascii_events_subscription) {
+        furi_pubsub_unsubscribe(desktop->ascii_events_pubsub, desktop->ascii_events_subscription);
+        desktop->ascii_events_subscription = NULL;
     }
 }
 
@@ -210,7 +217,7 @@ void desktop_lock(Desktop* desktop, bool pin_lock) {
         Cli* cli = furi_record_open(RECORD_CLI);
         cli_session_close(cli);
         furi_record_close(RECORD_CLI);
-        if(!XTREME_SETTINGS()->allow_locked_rpc_commands) {
+        if(!xtreme_settings.allow_locked_rpc_commands) {
             Bt* bt = furi_record_open(RECORD_BT);
             bt_close_rpc_connection(bt);
             furi_record_close(RECORD_BT);
@@ -373,6 +380,8 @@ Desktop* desktop_alloc() {
 
     desktop->input_events_pubsub = furi_record_open(RECORD_INPUT_EVENTS);
     desktop->input_events_subscription = NULL;
+    desktop->ascii_events_pubsub = furi_record_open(RECORD_ASCII_EVENTS);
+    desktop->ascii_events_subscription = NULL;
 
     desktop->auto_lock_timer =
         furi_timer_alloc(desktop_auto_lock_timer_callback, FuriTimerTypeOnce, desktop);
@@ -402,7 +411,7 @@ bool desktop_api_is_locked(Desktop* instance) {
 
 void desktop_api_unlock(Desktop* instance) {
     furi_assert(instance);
-    view_dispatcher_send_custom_event(instance->view_dispatcher, DesktopLockedEventUnlocked);
+    view_dispatcher_send_custom_event(instance->view_dispatcher, DesktopGlobalApiUnlock);
 }
 
 FuriPubSub* desktop_api_get_status_pubsub(Desktop* instance) {
@@ -485,7 +494,7 @@ int32_t desktop_srv(void* p) {
 
     scene_manager_next_scene(desktop->scene_manager, DesktopSceneMain);
 
-    if(XTREME_SETTINGS()->lock_on_boot || furi_hal_rtc_is_flag_set(FuriHalRtcFlagLock)) {
+    if(xtreme_settings.lock_on_boot || furi_hal_rtc_is_flag_set(FuriHalRtcFlagLock)) {
         desktop_lock(desktop, true);
     } else {
         if(!loader_is_locked(desktop->loader)) {

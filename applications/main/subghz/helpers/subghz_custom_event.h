@@ -6,6 +6,8 @@ typedef enum {
     SubGhzCustomEventManagerSetRAW,
 
     //SubmenuIndex
+    SubmenuIndexFaacSLH_Manual_433,
+    SubmenuIndexFaacSLH_Manual_868,
     SubmenuIndexFaacSLH_433,
     SubmenuIndexFaacSLH_868,
     SubmenuIndexBFTClone,
@@ -22,9 +24,17 @@ typedef enum {
     SubmenuIndexSommer_FM_868,
     SubmenuIndexStilmatic,
     SubmenuIndexDTMNeo433,
+    SubmenuIndexDeaMio433,
     SubmenuIndexGibidi433,
+    SubmenuIndexNiceMHouse_433_92,
+    SubmenuIndexJCM_433_92,
+    SubmenuIndexFAACRCXT_433_92,
+    SubmenuIndexFAACRCXT_868,
+    SubmenuIndexNormstahl_433_92,
+    SubmenuIndexGeniusBravo433,
     SubmenuIndexGSN,
     SubmenuIndexAprimatic,
+    SubmenuIndexHCS101_433_92,
     SubmenuIndexANMotorsAT4,
     SubmenuIndexAlutechAT4N,
     SubmenuIndexNiceFlo12bit,
@@ -49,9 +59,9 @@ typedef enum {
     SubmenuIndexGateTX,
     SubmenuIndexDoorHan_315_00,
     SubmenuIndexDoorHan_433_92,
-    SubmenuIndexLiftMaster_315_00,
-    SubmenuIndexLiftMaster_390_00,
-    SubmenuIndexLiftMaster_433_00,
+    SubmenuIndexSecPlus_v1_315_00,
+    SubmenuIndexSecPlus_v1_390_00,
+    SubmenuIndexSecPlus_v1_433_00,
     SubmenuIndexSecPlus_v2_310_00,
     SubmenuIndexSecPlus_v2_315_00,
     SubmenuIndexSecPlus_v2_390_00,
@@ -66,6 +76,8 @@ typedef enum {
     SubGhzCustomEventSceneReceiverInfoTxStart,
     SubGhzCustomEventSceneReceiverInfoTxStop,
     SubGhzCustomEventSceneReceiverInfoSave,
+    SubGhzCustomEventSceneReceiverInfoSats,
+    SubGhzCustomEventSceneReceiverInfoBack,
     SubGhzCustomEventSceneSaveName,
     SubGhzCustomEventSceneSaveSuccess,
     SubGhzCustomEventSceneShowErrorBack,
@@ -74,7 +86,10 @@ typedef enum {
     SubGhzCustomEventSceneShowOnlyRX,
     SubGhzCustomEventSceneAnalyzerLock,
     SubGhzCustomEventSceneAnalyzerUnlock,
+    SubGhzCustomEventSceneSettingRepeater,
+    SubGhzCustomEventSceneSettingRemoveDuplicates,
     SubGhzCustomEventSceneSettingLock,
+    SubGhzCustomEventSceneSettingResetToDefault,
 
     SubGhzCustomEventSceneExit,
     SubGhzCustomEventSceneStay,
@@ -85,6 +100,8 @@ typedef enum {
     SubGhzCustomEventSceneRpcSessionClose,
 
     SubGhzCustomEventViewReceiverOK,
+    SubGhzCustomEventViewReceiverOKLong,
+    SubGhzCustomEventViewReceiverOKRelease,
     SubGhzCustomEventViewReceiverConfig,
     SubGhzCustomEventViewReceiverBack,
     SubGhzCustomEventViewReceiverOffDisplay,
@@ -109,6 +126,9 @@ typedef enum {
 
     SubGhzCustomEventViewFreqAnalOkShort,
     SubGhzCustomEventViewFreqAnalOkLong,
+
+    SubGhzCustomEventViewRepeaterStart,
+    SubGhzCustomEventViewRepeaterStop,
 
     SubGhzCustomEventByteInputDone,
 } SubGhzCustomEvent;

@@ -9,11 +9,12 @@
 #include "mutex.h"
 #include "string.h"
 
-#include <task.h>
 #include <timers.h>
 #include "log.h"
 #include <furi_hal_rtc.h>
-#include <furi_hal_console.h>
+
+#include <FreeRTOS.h>
+#include <task.h>
 
 #define TAG "FuriThread"
 
@@ -541,7 +542,7 @@ static size_t __furi_thread_stdout_write(FuriThread* thread, const char* data, s
     if(thread->output.write_callback != NULL) {
         thread->output.write_callback(data, size);
     } else {
-        furi_hal_console_tx((const uint8_t*)data, size);
+        furi_log_tx((const uint8_t*)data, size);
     }
     return size;
 }

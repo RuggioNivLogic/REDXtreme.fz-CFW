@@ -17,7 +17,7 @@ static void xtreme_app_scene_protocols_bad_bt_changed(VariableItem* item) {
     XtremeApp* app = variable_item_get_context(item);
     bool value = variable_item_get_current_value_index(item);
     variable_item_set_current_value_text(item, value ? "BT" : "USB");
-    XTREME_SETTINGS()->bad_bt = value;
+    xtreme_settings.bad_bt = value;
     app->save_settings = true;
 }
 
@@ -25,7 +25,7 @@ static void xtreme_app_scene_protocols_bad_bt_remember_changed(VariableItem* ite
     XtremeApp* app = variable_item_get_context(item);
     bool value = variable_item_get_current_value_index(item);
     variable_item_set_current_value_text(item, value ? "ON" : "OFF");
-    XTREME_SETTINGS()->bad_bt_remember = value;
+    xtreme_settings.bad_bt_remember = value;
     app->save_settings = true;
 }
 
@@ -36,16 +36,23 @@ static void xtreme_app_scene_protocols_subghz_extend_changed(VariableItem* item)
     app->save_subghz = true;
 }
 
+static void xtreme_app_scene_protocols_file_naming_prefix_changed(VariableItem* item) {
+    XtremeApp* app = variable_item_get_context(item);
+    bool value = variable_item_get_current_value_index(item);
+    variable_item_set_current_value_text(item, value ? "After" : "Before");
+    xtreme_settings.file_naming_prefix_after = value;
+    app->save_settings = true;
+}
+
 void xtreme_app_scene_protocols_on_enter(void* context) {
     XtremeApp* app = context;
-    XtremeSettings* xtreme_settings = XTREME_SETTINGS();
     VariableItemList* var_item_list = app->var_item_list;
     VariableItem* item;
 
     item = variable_item_list_add(
         var_item_list, "BadKB Mode", 2, xtreme_app_scene_protocols_bad_bt_changed, app);
-    variable_item_set_current_value_index(item, xtreme_settings->bad_bt);
-    variable_item_set_current_value_text(item, xtreme_settings->bad_bt ? "BT" : "USB");
+    variable_item_set_current_value_index(item, xtreme_settings.bad_bt);
+    variable_item_set_current_value_text(item, xtreme_settings.bad_bt ? "BT" : "USB");
 
     item = variable_item_list_add(
         var_item_list,
@@ -53,8 +60,8 @@ void xtreme_app_scene_protocols_on_enter(void* context) {
         2,
         xtreme_app_scene_protocols_bad_bt_remember_changed,
         app);
-    variable_item_set_current_value_index(item, xtreme_settings->bad_bt_remember);
-    variable_item_set_current_value_text(item, xtreme_settings->bad_bt_remember ? "ON" : "OFF");
+    variable_item_set_current_value_index(item, xtreme_settings.bad_bt_remember);
+    variable_item_set_current_value_text(item, xtreme_settings.bad_bt_remember ? "ON" : "OFF");
 
     item = variable_item_list_add(var_item_list, "SubGHz Freqs", 0, NULL, app);
     variable_item_set_current_value_text(item, ">");
@@ -66,6 +73,16 @@ void xtreme_app_scene_protocols_on_enter(void* context) {
 
     item = variable_item_list_add(var_item_list, "GPIO Pins", 0, NULL, app);
     variable_item_set_current_value_text(item, ">");
+
+    item = variable_item_list_add(
+        var_item_list,
+        "File Naming Prefix",
+        2,
+        xtreme_app_scene_protocols_file_naming_prefix_changed,
+        app);
+    variable_item_set_current_value_index(item, xtreme_settings.file_naming_prefix_after);
+    variable_item_set_current_value_text(
+        item, xtreme_settings.file_naming_prefix_after ? "After" : "Before");
 
     variable_item_list_set_enter_callback(
         var_item_list, xtreme_app_scene_protocols_var_item_list_callback, app);
